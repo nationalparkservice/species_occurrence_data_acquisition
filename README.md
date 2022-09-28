@@ -2,6 +2,4 @@
 
 This repository holds R code used by the Species Inventory Team (WASO NRSS IMD) to download data from external sources to acqure speces occurance records for National Park units.
 
-*Note:*
-This repository is under development.
-Please check back in later. - 28 September 2022, MVS
+**Note:** This repository is under development. Please check back later. - 28 September 2022, MVS
