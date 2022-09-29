@@ -14,7 +14,7 @@ Welcome to Species Occurrence Data Acquisition (SODA), a repository used by the 
 
 # About this repository
 
-This repository provides data and R code to download and evaluate species occurrence records form remote repositories for species occurrence data requests by National Park units. Currently, species occurrence records are being downloaded from the Global Biodiversity Information Facility (GBIF) using the rgbif package (Chamberlain & Mcglinn 2022). Taxonomic names are validated against the Integrated Taxonomic Information System (ITIS) using the taxadb package (Kari, Chamberlain, and Boettiger 2020) and the latest [eBird checklist](https://www.birds.cornell.edu/clementschecklist/updateindex/) from the Cornell Lab of Ornithology. Federal listing status under the Endangered Species Act (ESA) is determined using approved NPS data set published in the NPS Data Store (DeVivo 2021a).
+This repository provides data and R code to download and evaluate species occurrence records form remote repositories for species occurrence data requests by National Park units. Currently, species occurrence records are downloaded from the Global Biodiversity Information Facility (GBIF) using the rgbif package (Chamberlain & Mcglinn 2022). Taxonomic names are validated against the Integrated Taxonomic Information System (ITIS) using the taxadb package (Kari, Chamberlain, and Boettiger 2020) and the latest [eBird checklist](https://www.birds.cornell.edu/clementschecklist/updateindex/) from the Cornell Lab of Ornithology. Federal listing status under the Endangered Species Act (ESA) is determined using the approved NPS data set published in the NPS Data Store (DeVivo 2021a).
 
 Please note that the ESA and state listing status data are not included in this repository due to the large file sizes. For those using this repository, download local copies from the NPS Data Store.
 
@@ -22,8 +22,8 @@ Please note that the ESA and state listing status data are not included in this 
 
 Products produced from this workflow include:
 
-1.  a brief report on the the process and data received from GBIF (pdf),
-2.  two appendices (pdf) visualizing species occurrence data,
+1.  a report that documents the data acquisition and brief summaries of the data (pdf),
+2.  two appendices visualizing species occurrence data (pdf),
 3.  a species list (csv), and
 4.  a zipped file of species occurrence data from GBIF in Darwin Core Archive format.
 
@@ -44,6 +44,7 @@ For now, each park unit for which a species occurrence data request will be cond
 ------ \|- StateNSclean_2272464-data.csv  
 ------ \|- StateNSclean_2272464-manifest.txt  
 ------ \|- StateNSclean_2272464-metadata.xml  
+--- \|- conservationLists.html
 --- \|- conservationLists.R  
 --- \|- conservLists.RData
 
