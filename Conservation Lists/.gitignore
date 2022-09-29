@@ -1,0 +1,8 @@
+# Zipped folders
+*.zip
+/**/*.zip
+
+# Subdirectories
+/FederalConservationListTaxa_2272462-datapackage
+/StateNSclean_2272464-datapackage
+
