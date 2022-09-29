@@ -594,16 +594,6 @@ ITIS ID's were assigned to the *CleanSourceSci* field and used to match with the
 # Data are read into R from an *.RData file.
 # See ../Conservation Lists/conservationLists.R for details.
 load(file.path("..", "Conservation Lists", "conservLists.RData"))
-fedDefs <- read.table(
-  file.path(
-  "..",
-  "Conservation Lists", 
-  "FederalConservationListTaxa_for_Data_Protection_2272462-datapackage",
-  "FedDefs.txt"
-  ),
-  sep = "|", header = TRUE) |> 
-  dplyr::mutate(code = trimws(code, which = "both"))
-# kableExtra::kbl(fedDefs |> dplyr::arrange(code))
 
 #-- Federal Status
 # Vector of federal status in order of severity

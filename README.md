@@ -16,7 +16,7 @@ Welcome to Species Occurrence Data Acquisition (SODA), a repository used by the 
 
 This repository provides data and R code to download and evaluate species occurrence records form remote repositories for species occurrence data requests by National Park units. Currently, species occurrence records are being downloaded from the Global Biodiversity Information Facility (GBIF) using the rgbif package (Chamberlain & Mcglinn 2022). Taxonomic names are validated against the Integrated Taxonomic Information System (ITIS) using the taxadb package (Kari, Chamberlain, and Boettiger 2020) and the latest [eBird checklist](https://www.birds.cornell.edu/clementschecklist/updateindex/) from the Cornell Lab of Ornithology. Federal listing status under the Endangered Species Act (ESA) is determined using approved NPS data set published in the NPS Data Store (DeVivo 2021a).
 
-Please note that the ESA listing status data are not included in this repository due to the large file sizes and sensitivity of the data. For those using this repository, download a local copy from the NPS Data Store.
+Please note that the ESA and state listing status data are not included in this repository due to the large file sizes. For those using this repository, download local copies from the NPS Data Store.
 
 # Current products
 
@@ -29,11 +29,11 @@ Products produced from this workflow include:
 
 # Conceptualized workflow
 
-For now, each park unit for which a species occurrence data request will be conducted will have it's own sub-directory. Copies of the Rmarkdown files (Rmd) in the main directory will be in that sub-directory and customized for that specific park unit. These sub-directorywill not be pushed to this repository due to the large file sizes and sensitive data involved in these projects. Versions of the Rmd's in the the main directory will be updated with new features as they are developed.
+For now, each park unit for which a species occurrence data request will be conducted will have it's own sub-directory. Copies of the Rmarkdown files (Rmd) in the main directory will be in that sub-directory and customized for that specific park unit. These sub-directories will not be pushed to this repository due to the large file sizes involved in these projects. Versions of the Rmd's in the the main directory will be updated with new features as they are developed.
 
 ## Intended directory structure
 
-Main directory
+\<Main directory\>
 
 \|- Conservation Lists (sub-directory)  
 --\> \|- FederalConservationListTaxa_2272462-datapackage (sub-directory)  
@@ -44,9 +44,13 @@ Main directory
 ------ \|- StateNSclean_2272464-data.csv  
 ------ \|- StateNSclean_2272464-manifest.txt  
 ------ \|- StateNSclean_2272464-metadata.xml  
+--- \|- conservationLists.R  
+--- \|- conservLists.RData
+
 \|- Taxa Lists (sub-directory)  
 --- \|- duckdb (database from taxadb)  
---- \|- eBird-Clements-v2021-integrated-checklist-August-2021.csv  
+--- \|- eBird-Clements-v2021-integrated-checklist-August-2021.csv
+
 \|- PARK (sub-directory)  
 --- \|- AppendixA Bird Phenology.Rmd  
 --- \|- AppendixB Species Heatmaps.Rmd  
