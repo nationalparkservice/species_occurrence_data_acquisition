@@ -1,0 +1,954 @@
+---
+title: "Species Pull for [National Park Unit]"
+author:
+  - name: "Matthew Van Scoyoc" 
+  - name: "Tom Philippi" 
+  - name: "Lisa Nelson" 
+  - name: "Alison Loar" 
+    affiliation: |
+      | NPS Inventory Program
+      | NPS Inventory & Monitoring Division
+      | 1201 Oakridge, Suite 150
+      | Fort Collins, Colorado
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+params:
+  UnitCode: "PARK"
+  UnitName: "National Park Unit Name"
+  # GBIF key to access data. Use "new" for to run a new query for GBIF.
+  Key: "new"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+---
+
+```{r setup, eval=TRUE, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+#-- Global settings
+options(timeout = 600)
+gc() # Call a garbage collection to free up memory
+
+#-- knitr
+# Set global options for RMarkdown
+knitr::opts_chunk$set(eval = TRUE, 
+                      echo = FALSE, 
+                      results = 'hide', 
+                      comment = "",
+                      message=FALSE, 
+                      warning=FALSE,
+                      fig.path = "Figures/",
+                      tidy = TRUE, 
+                      tidy.opts = list(width.cutoff = 60), 
+                      cache = FALSE)
+ 
+#-- Packages
+# R packages used in this script
+pkgLst <- c("dplyr",       # data management
+            "glue",        # text string editing
+            "ggplot2",     # plotting/graphing
+            "here",        # navigating directories
+            "htmltools",   # tools for HTML generation and output
+            "htmlwidgets", # more html tools
+            "jsonlite",    # JSON parser
+            "kableExtra",  # table formatting
+            "knitr",       # Markdown formatting
+            "leaflet",     # spatial rendering
+            "lubridate",   # dating
+            "readr",       # writing TSV files
+            "rgbif",       # retrieve data from GBIF
+            "rgdal",       # geospatial data functions
+            "sf",          # spatial functions
+            "taxadb",      # taxa name validation
+            "tibble",      # data structures
+            "tidyr")       # data management
+
+#-- Install
+# Install packages if they aren't in your library
+instPkgs <- pkgLst %in% rownames(installed.packages())
+if (any(instPkgs == FALSE)) {
+  install.packages(pkgLst[!instPkgs], 
+                   lib =  .libPaths()[1], 
+                   repos = "https://cloud.r-project.org",
+                   type = 'source', 
+                   dependencies = TRUE, 
+                   quiet = TRUE)
+}
+
+# Load packages into work space
+# Note: This script is written so the packages do not need to be loaded.
+#     Comment out the next line if you want to supress loading packages.
+invisible(lapply(pkgLst, library, character.only = TRUE))
+
+#-- ggplot2 theme
+ggplot2::theme_set(ggplot2::theme_bw())
+ggplot2::theme_update(plot.title = ggplot2::element_text(hjust = 0.5))
+sppPage <- 40
+
+#-- eBird details
+eBirdChecklistURL <- "https://www.birds.cornell.edu/clementschecklist/wp-content/uploads/2021/08/eBird-Clements-v2021-integrated-checklist-August-2021.csv"
+
+eBirdChecklistFile <- file.path(
+  "..", 
+  "Taxa Lists",
+  "eBird-Clements-v2021-integrated-checklist-August-2021.csv"
+  )
+```
+
+```{r functions}
+#' Collapse conservation lists
+#' This function filters a conservation list and collapses the status and TSN so 
+#'     there is one observation per species name.
+#'
+#' @param conservList A dataframe of the conservation list of interest
+#' @param speciesList A vector of species names to filter the conservation list
+#'
+#' @return A dataframe of 3 variables:
+#'     - ProtectedSci: Species name from conservation list
+#'     - MatchListStatus: Collapsed conservation status
+#'     - ProtectedTSN: Collapsed taxonomic serial number (TSN)
+#'
+#' @examples collpaseList(fedList, speciesList$scientificName_gbif)
+collpaseList <- function(conservDF, speciesList){
+  conservDF = conservDF |> 
+    dplyr::filter(!is.na(taxonID) & taxonID %in% speciesList)
+  newDF <- conservDF |> 
+    dplyr::select(taxonID, MatchListStatus) |> 
+    dplyr::distinct() |> 
+    dplyr::group_by(taxonID) |> 
+    dplyr::summarise(MatchListStatus = toString(MatchListStatus)) |> 
+    merge({conservDF |> 
+            dplyr::select(taxonID, ProtectedTSN) |> 
+            dplyr::distinct() |> 
+            dplyr::group_by(taxonID) |> 
+            dplyr::summarise(ProtectedTSN = toString(ProtectedTSN))}, 
+          by = "taxonID", all = TRUE)
+  return(newDF)
+}
+
+#-- getAOAFeature
+# Downloads NPS Inventory and Monitoring area of analysis for the park unit of 
+#     interest.
+# aoaExtent options: "park", "km3", "km30"
+getAOAFeature <- function(UnitCode, aoaExtent="km30", lifecycle = "Active") {
+  tempOutput <- file.path("temp.geojson")
+  
+  featureServiceURLs <-
+    list("park" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_park_AOA_nad_py/FeatureServer/0",
+         "km3" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_3km_AOA_nad_py/FeatureServer/1",
+         "km30" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_30km_AOA_nad_py/FeatureServer/2"
+         )
+  
+  # Request feature in WGS83 spatial reference (outSR=4326)
+  featureServicePathInfo <- paste0(
+    'query?where=UNITCODE+%3D+%27', UnitCode,
+    '%27&outFields=*&returnGeometry=true&outSR=4326&FeatureLifecycle="',
+    lifecycle, '"&f=pjson'
+    )
+  featureServiceRequest <- paste(featureServiceURLs[[aoaExtent]],
+                                 featureServicePathInfo, sep = "/" )
+
+  print(featureServiceRequest)
+  geoJSONFeature <- jsonlite::fromJSON(featureServiceRequest)
+  
+  # Have to save to temp file
+  jsonFeature <- download.file(featureServiceRequest, tempOutput, mode = "w")
+  # For rgdal 1.2+, layer (format) does not need to be specified
+  featurePoly <- sf::st_read(dsn = tempOutput)
+  # featurePoly <- rgdal::readOGR(dsn = tempOutput)
+  #featurePoly <- rgdal::readOGR(dsn = tempOutput, layer = "OGRGeoJSON")
+  
+  return(featurePoly)
+}
+
+#-- Glue vector
+# Returns a string of text with comma's between each value
+glueVector <- function(v) {
+  if (length(v) == 1){
+    as.character(v)
+  } else if (length(v) == 2){
+    glue::glue("{v[1]} and {v[2]}")
+  } else {
+    glue::glue("{paste(v[1:length(v) - 1], collapse = ', ')}, and {v[length(v)]}")
+  }
+}
+
+#-- myTable
+# Custom table
+myTable <- function(myTable, col_names, caption){
+  kableExtra::kbl(myTable, col.names = col_names, caption = caption) |> 
+  kableExtra::kable_styling(full_width = FALSE,
+                            bootstrap_options = c("striped", "bordered",
+                                                  "condensed")) |> 
+  kableExtra::kable_paper("hover") |>
+  kableExtra::kable_minimal()
+}
+
+#-- wtkString
+# Creates a WTK string from a polygon
+wtkString <- function(myPolygon){
+  sf::st_bbox(myPolygon) |> 
+    sf::st_as_sfc() |> 
+    sf::st_as_text()
+}
+```
+
+# Overview
+
+This script pulls species records for `r params$ParkName` from the Global Biodiversity Information Facility (GBIF) resource using R (ver. `r paste(sessionInfo()$R.version$major, sessionInfo()$R.version$minor, sep=".")`, R Core Team 2022) and the rgbif package (ver. `r sessionInfo()$otherPkgs$rgbif$Version`, Chamberlain & Mcglinn 2022).
+This script will retrieve species records from GBIF in Darwin Core Archive format.
+
+The data from GBIF are species occurrence records from museum collections, academic studies, and citizen science programs.
+The level of search effort is often not recorded in these data and therefore it is not appropriate to use these data to estimate species abundance or trends over time.
+Furthermore, while most of these data contain spatial coordinates, they often do not include spatial precision metrics.
+
+## Area of Analyses
+
+Three tiers of area will be examined in this script: 1) the park boundary, 2) a 3 km buffer outside the park boundary, and 3) a second from 3 km to 30 km buffer outside the park boundary.
+This approach provides three tiers of species occurrence data: 1) species that have been recorded in the park, 2) species that likely occur in the park but have not been recorded in the park, and 3) species that occur near the park that have not been recorded in the park.
+
+```{r getAOA}
+# NPS Park Tiles for map background:
+tileURL  <- 'https://atlas-stg.geoplatform.gov/styles/v1/atlas-user/ck58pyquo009v01p99xebegr9/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYXRsYXMtdXNlciIsImEiOiJjazFmdGx2bjQwMDAwMG5wZmYwbmJwbmE2In0.lWXK2UexpXuyVitesLdwUg&'
+
+# Pull area of analysis features
+aoaPark <- getAOAFeature(UnitCode = params$UnitCode, aoaExtent = "park")
+aoa3k <- getAOAFeature(UnitCode = params$UnitCode, aoaExtent = "km3")
+aoa30k <- getAOAFeature(UnitCode = params$UnitCode, aoaExtent = "km30")
+
+# Set CRS
+if(isTRUE(sf::st_crs(aoaPark) == sf::st_crs(aoa30k))) {
+  crs <- sf::st_crs(aoa30k)
+  } else({
+    message("aoaPark was used to set the CRS")
+    crs <- sf::st_crs(aoaPark)
+    })
+```
+
+```{r aoakMap, results='hold'}
+#-- Map
+# Map with NPS Park Tiles basemap
+mapTitle <- htmltools::tags$div(
+  htmltools::HTML(
+    sprintf("%s: Area of Analysis - %s", 
+            params$UnitName, 
+            "park (blue), km3 (red), & km30 (black)")
+    )
+  )
+
+aoaMap <- leaflet::leaflet() |> 
+  leaflet::addTiles(urlTemplate = tileURL) |>  
+  leaflet::addPolylines(data = aoaPark$geometry, label = aoaPark$UnitName, 
+                        color = "blue", weight = 3, opacity = 1) |> 
+  leaflet::addPolylines(data = aoa3k$geometry, label = aoa3k$UnitName, 
+                        color = "red", weight = 3, opacity = 1) |> 
+  leaflet::addPolylines(data = aoa30k$geometry, label = aoa30k$UnitName, 
+                        color = "black", weight = 3, opacity = 1)
+htmltools::tagList(aoaMap |> 
+                     leaflet::addControl(mapTitle, position = "topright"))
+```
+
+# Download Records from GBIF
+
+GBIF records requests are staged on the GBIF servers and have to be downloaded.
+See [Getting Occurrence Data From GBIF](https://docs.ropensci.org/rgbif/articles/getting_occurrence_data.html) for details.
+This script submits a records request to GBIF using the 30 km AOA to spatially query GBIF records. 
+The data are downloaded, unzipped, and the data are read in to R once the request is available from GBIF.
+
+```{r pullGBIF}
+# Make bounding boxes for AOA extents
+# bboxPark <- wtkString(aoaPark)
+# bbox3k <- wtkString(aoa3k)
+bbox30k <- wtkString(aoa30k)
+
+#-- Pull data from GBIF
+# Pull species occurrence records using the 30km AOA
+# Note: Copy and paste the key into the params$Key in the YAML header
+if(params$Key == "new"){
+  gbifDwnld <- rgbif::occ_download(rgbif::pred_within(bbox30k), 
+                                   format = "DWCA", overwrite = TRUE)
+  rgbif::occ_download_wait(gbifDwnld)
+  gbif <- rgbif::occ_download_get(gbifDwnld) |> 
+    rgbif::occ_download_import() |> 
+    dplyr::mutate(date = as.Date(eventDate, "%Y-%m-%d"), 
+                  dayOfYear = lubridate::yday(date))
+  } else if(file.exists(paste0(params$Key, ".zip"))){
+    gbif <- rgbif::occ_download_import(key = params$Key) |>
+      dplyr::mutate(date = as.Date(eventDate, "%Y-%m-%d"), 
+                    dayOfYear = lubridate::yday(date))
+    } else({
+      gbif <- rgbif::occ_download_get(key = params$Key) |> 
+        rgbif::occ_download_import() |> 
+        dplyr::mutate(date = as.Date(eventDate, "%Y-%m-%d"), 
+                      dayOfYear = lubridate::yday(date))
+    })
+```
+
+`r nrow(gbif)` records were downloaded with `r ncol(gbif)` fields of data.
+All records have scientific names and spatial data.
+Most of the records do not contain spatial uncertainty or precision data.
+`r sum(is.na(gbif$eventDate))` records are missing valid dates.
+These data span `r min(gbif$year, na.rm = TRUE)` to `r max(gbif$year, na.rm = TRUE)`.
+
+```{r exploreGBIF, results='hold'}
+# Count NA's by selected column
+kableExtra::kbl(t(dplyr::select(gbif, scientificName, species,
+                              acceptedScientificName, verbatimScientificName, 
+                              decimalLatitude, decimalLongitude, 
+                              coordinateUncertaintyInMeters, 
+                              coordinatePrecision, eventDate) |> 
+                  dplyr::summarise_all(function(x) sum(is.na(x)))), 
+                col.names = "Number of missing values",
+                caption = "Missing values in species names, spatial and temporal fields.") |> 
+  kableExtra::kable_styling(full_width = FALSE,
+                            bootstrap_options = c("bordered", "condensed")) |> 
+  kableExtra::kable_paper("hover") |>
+  kableExtra::kable_minimal()
+```
+
+```{r spatial}
+# Convert tabular data to spatial data and clip to 30km AOA.
+gbif_sf <- sf::st_as_sf(gbif, 
+                        coords = c("decimalLongitude", "decimalLatitude"),
+                        crs = crs) |> 
+  sf::st_intersection(aoa30k) |> 
+  dplyr::select(names(gbif[, 1]):names(gbif[, length(gbif)]), geometry)
+
+# Test if spatial data are valid
+validGBIF <- unique(sf::st_is_valid(sf::st_as_sf(gbif_sf)))
+
+# There is certainly a more elegant way to do this, but this works for now.
+gbif_sf$inPark <- as.logical(sf::st_intersects(gbif_sf, aoaPark))
+gbif_sf$inKm3 <- as.logical(sf::st_intersects(gbif_sf, aoa3k))
+gbif_sf$locale <- ifelse(!is.na(gbif_sf$inPark), 'park', 'km3')
+gbif_sf$locale <- ifelse(is.na(gbif_sf$inPark) & is.na(gbif_sf$inKm3), 
+                         'km30', gbif_sf$locale)
+gbif_sf$locale <- factor(gbif_sf$locale, levels = c("park", "km3", "km30"))
+
+# Remove gbif to free up memory
+rm(gbif)
+```
+
+```{r localeTables}
+# Locations
+localeTbl <- as.data.frame(table(gbif_sf$locale))
+
+# Record types
+typesTable <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonRank  %in% c("SPECIES", "SUBSPECIES") & 
+                  locale %in% c('park')) |> 
+  dplyr::select(basisOfRecord, gbifID) |>
+  dplyr::distinct() |> 
+  dplyr::group_by(basisOfRecord) |> 
+  dplyr::count(basisOfRecord, name = 'gbifID_n')
+
+instituteTable <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonRank  %in% c("SPECIES", "SUBSPECIES") & 
+                  locale %in% c('park')) |> 
+  dplyr::select(institutionCode, gbifID) |>
+  dplyr::distinct() |> 
+  dplyr::group_by(institutionCode) |> 
+  dplyr::count(institutionCode, name = 'gbifID_n')
+
+# Species per Class
+sppTable <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonRank %in% c("SPECIES", "SUBSPECIES") & 
+                  locale %in% c('park')) |> 
+  dplyr::select(kingdom:genus, verbatimScientificName) |>
+  dplyr::distinct() |> 
+  dplyr::group_by(kingdom, phylum) |> 
+  dplyr::count(class, name = 'species_n')
+
+# Records per class
+recordsTable <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonRank %in% c("SPECIES", "SUBSPECIES") & 
+                  locale %in% c('park')) |> 
+  dplyr::select(kingdom:genus, gbifID) |>
+  dplyr::distinct() |> 
+  dplyr::group_by(kingdom, phylum) |> 
+  dplyr::count(class, name = 'observations')
+```
+
+The geometry is `r ifelse(isTRUE(validGBIF), "valid", "not valid")` when the GBIF data were converted to a spatial object.
+There are `r localeTbl[localeTbl$Var1 == 'park', 2]` species records with the park boundary, another `r localeTbl[localeTbl$Var1 == 'km3', 2]` records within 3km of the boundary, and `r localeTbl[localeTbl$Var1 == 'km30', 2]` more between 3km and 30km of the boundary.
+Records were obtained from `r nrow(typesTable)` collections or observational data types.
+Records were obtained form `r nrow(instituteTable)` sources (e.g., museums or data repositories).
+
+```{r printTables1, results='hold'}
+myTable(localeTbl,
+        col_names = c("Location", "GBIF Records"),
+        caption = "Number of GBIF records by AOA areas")
+
+myTable(typesTable, 
+        col_names = c("Record Types", "GBIF Records"), 
+        caption = "Number of GBIF records by record type observed in the Park")
+
+myTable(sppTable, 
+        col_names = c("Kingdom", "Phylum", "Class", "Number of Species"),
+        caption = "Number of species by Class observed in the Park")
+
+myTable(recordsTable, 
+        col_names = c("Kingdom", "Phylum", "Class", "GBIF Records"),
+        caption = "Number of GBIF records by Class observed in the Park")
+```
+
+# Species Name Validation
+
+Taxonomic names are validated against the Integrated Taxonomic Information System (ITIS) and the latest [eBird checklist](https://www.birds.cornell.edu/clementschecklist/updateindex/) from the Cornell Lab of Ornithology.
+Taxonomic names from ITIS are accessed on `r lubridate::date(file.info(file.path("..", "Taxa Lists", "duckdb"))$ctime)` using the taxadb package (ver. `r sessionInfo()$otherPkgs$taxadb$Version`, Norman, Chamberlain, & Boettiger 2020). 
+The eBird checklist was downloaded from the Cornell Lab of Ornithology on `r lubridate::date(file.info(file.path(eBirdChecklistFile))$ctime)`.
+
+The species name fields from GBIF either include authorities (i.e., the *scientificName*, *acceptedScientificName*, and *verbatimScientificName* fields) or do not include infraspecific epithets for subspecies (i.e., the *species* field), which results in species names not matched to ITIS ID numbers and species names not matched to species conservation lists. 
+Clean species names were created using the Genus, specific epithet, and infraspecific epithet fields from GBIF to facilitate matching to ITIS and species conservation lists.
+
+```{r itis}
+# Download and connect to species database using the taxadb package
+# Note: The following code downloads a new database if 1) the data base does not 
+#     exist and 2) if the data base if more than 90 days old "(90*24*60*60)"
+itisDB <- file.path("..", "Taxa Lists", "duckdb")
+if(file.exists(itisDB) & 
+   (file.info(itisDB)$ctime > file.info(itisDB)$ctime + (90*24*60*60))){
+  taxadb::td_create("itis", schema = "dwc", 
+                    dbdir = file.path("..", "Taxa Lists"), 
+                    overwrite = TRUE)
+  } else(taxadb::td_connect(file.path("..", "Taxa Lists")))
+
+# Reduce the data to create a species list, keeping the taxaID
+sppList <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonRank %in% c("SPECIES", "SUBSPECIES")) |> 
+  dplyr::select(taxonKey, taxonRank, kingdom:genus,  specificEpithet,
+                infraspecificEpithet, verbatimScientificName) |> 
+  dplyr::distinct() |> 
+  # Construct species name due to inaccuracies in verbatimScientificName from
+  #     GBIF. Some entries in verbatimScientificName contain authorship
+  #     preventing them from being recognized in ITIS.
+  dplyr::mutate(scientificName_gbif = {paste(genus, specificEpithet,
+                                             infraspecificEpithet, sep = " ") |>
+                                       trimws()}) |> 
+  dplyr::mutate(itisID_vSN = taxadb::get_ids(verbatimScientificName, "itis"), 
+                itisID = taxadb::get_ids(scientificName_gbif, "itis"),
+                itisID = ifelse(is.na(itisID), itisID_vSN, itisID)) |> 
+  dplyr::select(-c(specificEpithet, infraspecificEpithet, 
+                   verbatimScientificName, itisID_vSN)) |> 
+  dplyr::distinct() |> 
+  dplyr::rename("taxonRank_gbif" = taxonRank)
+
+sppList <- merge(sppList, 
+                 taxadb::filter_id(sppList$itisID, provider = "itis"), 
+                 by.x = c("itisID"), 
+                 by.y = c("taxonID"),
+                 all.x = TRUE, all.y = FALSE) |> 
+  dplyr::select(-c(sort, input, specificEpithet, infraspecificEpithet)) |> 
+  # 4 records were mislabled in GBIF as species when they were genus
+  dplyr::filter(taxonRank != "genus") |> 
+  dplyr::distinct() |> 
+  dplyr::rename("taxonKey_gbif" = taxonKey, 
+                "kingdom_gbif" = kingdom.x,
+                "phylum_gbif" = phylum.x,
+                "class_gbif" = class.x,
+                "order_gbif" = order.x, 
+                "family_gbif" = family.x,
+                "genus_gbif" = genus.x, 
+                "scientificName_itis" = scientificName,
+                "taxonRank_itis" = taxonRank,
+                "kingdom_itis" = kingdom.y,
+                "plylum_itis" = phylum.y,
+                "class_itis" = class.y,
+                "order_itis" = order.y, 
+                "family_itis" = family.y,
+                "genus_itis" = genus.y)
+
+#-- List validation snippets
+# Uncomment to explore sppList
+# sum(is.na(sppList$scientificName_gbif))
+# sum(is.na(sppList$scientificName_itis))
+# sppList[is.na(sppList$scientificName_gbif) | is.na(sppList$scientificName_itis), 
+#         c(1:3, 13, 11:12, 23)]  |> 
+#   View()
+# sppList[sppList$class_gbif != sppList$class_itis, 
+#         c(1:3, 13, 6, 19, 11:12, 23)] |> 
+#   View()
+# sppList[sppList$taxonRank == "genus" | is.na(sppList$taxonRank), 
+#         c(1:3, 13, 11:12, 23)] |> 
+#   View()
+# unique(sppList$taxonRank_gbif)
+# unique(sppList$taxonRank_itis)
+# sppList[sppList$taxonRank_itis %in% c("family", "genus", "variety", NA), 
+#         c(1:3, 13, 11:12, 23)] |> 
+#   View()
+```
+
+```{r eBird}
+# Get the checklist 
+if (file.exists(eBirdChecklistFile)) {
+  # read from that local copy
+  checklist <- tibble::as_tibble(
+    read.csv( eBirdChecklistFile, as.is = TRUE)
+    )
+  } else {
+    checklist <- tibble::as_tibble(
+      read.csv(eBirdChecklistURL, as.is = TRUE)
+      )
+    checklist <- checklist[, !apply(is.na(checklist), 2, all)]
+    write.csv(checklist, eBirdChecklistFile, row.names = FALSE)
+    }
+
+birds <- dplyr::filter(sppList, class_gbif == "Aves")
+
+#-- Explore taxa names
+# Check scientific and common names against the eBird checklist
+# This section is commented out to conserve memory when rendering the report. 
+#     Uncomment this section to explore the data.
+# 
+# oops <- dplyr::filter(sppList_birds,
+#                       !scientificName_gbif %in% checklist$scientific.name)
+# nrow(oops)
+# 
+# oops <- dplyr::filter(sppList_birds,
+#                         !scientificName_itis %in% checklist$scientific.name)
+# nrow(oops)
+# 
+# oops <- dplyr::filter(sppList_birds,
+#                         !vernacularName %in% checklist$English.name)
+# nrow(oops)
+# 
+# if (nrow(oops) > 0) {
+#   message("Species names not in eBird checklist:")
+#   print(oops[, c(10:11, 22)])
+# } else(message("All species names matched the eBird checklist."))
+#-- 
+
+#-- Fix misspelled names --
+# Common names
+# birds["vernacularName"][birds["vernacularName"] == "Blue winged Teal"] <- 
+#   "Blue-winged Teal"
+# 
+# Scientific names
+# These are the result old of species names with unrecognized infraspecific
+#     epithets.
+# birds["vernacularName"][birds["scientificName_gbif"] == 
+#                           "Hesperiphona vespertinus brooksi"] <- 
+#   "Evening Grosbeak"
+#--
+
+sppList_birds <- merge(
+  dplyr::filter(birds, 
+                  scientificName_gbif %in% checklist$scientific.name),
+                checklist[, c(4:6, 8:10, 1)], 
+                by.x = c("scientificName_gbif"), 
+                by.y = c("scientific.name"),
+                all.x = TRUE, all.y = FALSE
+                ) |> 
+  dplyr::bind_rows(
+    merge(
+  dplyr::filter(birds, 
+                  !scientificName_gbif %in% checklist$scientific.name),
+                checklist[, c(4:6, 8:10, 1)], 
+                by.x = c("vernacularName"), 
+                by.y = c("English.name"),
+                all.x = TRUE, all.y = FALSE
+    )
+  ) |> 
+  # Fill missing common names from eBird
+  dplyr::mutate(vernacularName = ifelse(is.na(vernacularName), English.name, 
+                                        vernacularName)) |> 
+  dplyr::rename("order_eBird" = order, 
+                "family_eBird" = family,
+                "category__eBird" = category,
+                "exticnt_eBird" = extinct,
+                "sort2021_eBird" = sort.v2021) |> 
+  dplyr::arrange(sort2021_eBird) |> 
+  dplyr::select(names(sppList), sort2021_eBird)
+
+#-- Misspelled names --
+# Correct misspelled vernacular names in GBIF records
+# Run this next section after running birds to look for missing or misspelled 
+#     names.
+#     Then correct the names using the following code and re-run birds
+# 
+# sppList_birds[is.na(sppList_birds$sort2021_eBird), c(1:3, 13, 11:12, 23:24)] |> 
+#   View()
+# checklist[checklist$scientific.name == "Setophaga aestiva", ]
+# checklist[checklist$English.name == "Hairy Woodpecker", ]
+#--
+
+#-- Validation check --
+# sppList_birds[sppList_birds$class_gbif != sppList_birds$class_itis,
+#                   c(1:3, 13, 11:12, 23:24)] |> 
+#   View()
+# 
+# sppList_birds[, c(1:3, 13, 11:12, 23:24)] |> View()
+#--
+
+#-- Combine lists
+sppList <- sppList |> 
+  dplyr::filter(!class_gbif == "Aves") |> 
+  dplyr::mutate(sort2021_eBird = NA) |> 
+  dplyr::bind_rows(sppList_birds)
+```
+
+Federal and State species conservation lists were obtained from [NPS Integrated Resource Management Applications (IRMA) Data Store](https://irma.nps.gov/DataStore/) (DeVivo 2021a, DeVivo 2021b).
+ITIS ID's were assigned to the *CleanSourceSci* field and used to match with the IDIS ID from the clean speciies names created from the GBIF data because the species names fields from the conservation lists and the GBIF data don't match neatly.
+
+```{r conservLists}
+# Read federal and state lists of species of conservation concern
+# Data are read into R from an *.RData file.
+# See ../Conservation Lists/conservationLists.R for details.
+load(file.path("..", "Conservation Lists", "conservLists.RData"))
+fedDefs <- read.table(
+  file.path(
+  "..",
+  "Conservation Lists", 
+  "FederalConservationListTaxa_for_Data_Protection_2272462-datapackage",
+  "FedDefs.txt"
+  ),
+  sep = "|", header = TRUE) |> 
+  dplyr::mutate(code = trimws(code, which = "both"))
+# kableExtra::kbl(fedDefs |> dplyr::arrange(code))
+
+#-- Federal Status
+# Vector of federal status in order of severity
+fedStatus_priority <- c("Fed-E", "Fed-T", "Fed-C", "Fed-PE", "Fed-PT", "Fed-UR",
+                        "Fed-SC", "Fed-RT", "Fed-AD", "Fed-DM", "Fed-DNS",
+                        "Fed-D3C", "Fed-D3A")
+# Filter and edit Federal list
+fedList <- dplyr::filter(fedList, ParkCode %in% c("All", params$UnitCode))
+
+# Pull names and ID's from ITIS
+fedList_ITIS <- taxadb::filter_name(unique(fedList$CleanSourceSci), 
+                                    provider = 'itis') |> 
+  dplyr::select(taxonID, scientificName, vernacularName, taxonomicStatus,
+                acceptedNameUsageID, input) |> 
+  rename("CleanSourceSci" = input) |> 
+  dplyr::left_join(dplyr::select(fedList, CleanSourceSci, MatchListStatus, 
+                      ProtectedTSN), by = 'CleanSourceSci')
+
+aoaFedList <- collpaseList(fedList_ITIS, sppList$itisID) |>  
+  dplyr::rename("fedStatus" = MatchListStatus, 
+                "fedTSN" = ProtectedTSN)
+aoaFedList <- merge(aoaFedList, 
+                    taxadb::filter_id(aoaFedList$taxonID, provider = "itis"), 
+                    by= 'taxonID',
+                    all.x = TRUE, all.y = FALSE) |> 
+  dplyr::select(taxonID, scientificName, vernacularName, fedStatus, fedTSN)
+
+#-- State Status
+# TODO: subset important conservation nature serve/state status
+# stateList_priority <- c("NM-E", "NM-T", )
+# stateStatus <- unique(stateList[stateList$SourceSci %in% 
+#                                   parkStateList$SourceSci, 2])
+# sapply(stateStatus, function (x) stringr::str_detect(x, "G2"))
+# stateList <- stateList |>
+#   dplyr::filter(ParkCode %in% c("All", params$UnitCode))
+# # stateList$itisID <- taxadb::get_ids(stateList$CleanSourceSci, "itis")
+# aoaStateList <- collpaseList(stateList, sppList$itisID) |>
+#   dplyr::rename("stateStatus" = MatchListStatus,
+#                 "stateTSN" = ProtectedTSN)
+
+#-- Finalize dataframe
+# Merge federal and state lists
+# aoaConservList <- merge(aoaFedList, aoaStateList, by = "itisID", all = TRUE)
+
+# Append conservation status to sppList
+sppList <- merge(sppList, 
+                 dplyr::select(aoaFedList, taxonID, fedStatus, fedTSN), 
+                 by.x = 'itisID', by.y = 'taxonID', 
+                 all = TRUE)
+#-- Close database connection
+taxadb::td_disconnect()
+```
+
+```{r sppList}
+localeCount <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonKey %in% sppList$taxonKey_gbif) |> 
+  dplyr::select(taxonKey, locale, gbifID) |> 
+  dplyr::group_by(taxonKey) |> 
+  dplyr::count(locale) |> 
+  tidyr::spread(locale, n, fill = 0)
+
+sppDoYs <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonKey %in% sppList$taxonKey_gbif) |> 
+  dplyr::select(taxonKey, date, dayOfYear, year) |> 
+  dplyr::group_by(taxonKey) |> 
+  dplyr::summarise(firstDate = min(date), 
+                   lastDate = max(date), 
+                   firstYear = min(year), 
+                   lastYear = max(year))
+
+sppList <- merge(sppList, localeCount,
+                     by.x = "taxonKey_gbif", by.y = "taxonKey",
+                     all.x = TRUE, all.y = FALSE) |> 
+  merge(sppDoYs, by.x = "taxonKey_gbif", by.y = "taxonKey",
+        all.x = TRUE, all.y = FALSE) |> 
+  dplyr::select(taxonKey_gbif, scientificName_gbif, itisID, scientificName_itis,
+                vernacularName, taxonRank_gbif, kingdom_gbif, phylum_gbif,
+                class_gbif, order_gbif, family_gbif, genus_gbif, sort2021_eBird, 
+                fedStatus, fedTSN, park, km3, km30,
+                firstDate, lastDate, firstYear, lastYear) |> 
+  dplyr::arrange(kingdom_gbif, phylum_gbif, class_gbif, 
+                 order_gbif, family_gbif, genus_gbif, sort2021_eBird,
+                 scientificName_gbif)
+
+# Fix missing common names
+sppList["vernacularName"][sppList["scientificName_gbif"] ==
+                            "Lycaeides melissa"] <- "Melissa Blue"
+
+# Save species table
+write.csv(sppList, file = paste0(params$UnitCode, "_SpeceisTable.csv"), 
+          row.names = FALSE)
+```
+
+# Summaries
+
+```{r sppTables}
+status_fxn <- function(status, var_name){
+  dplyr::filter(parkFedList, stringr::str_detect(fedStatus, status)) |> 
+    dplyr::select(scientificName_gbif, vernacularName, fedStatus) |> 
+    dplyr::mutate(Status = var_name)
+}
+
+# Subset federal list and append species names
+parkFedList <- sppList |> 
+  dplyr::filter(park > 0 & !is.na(fedStatus)) |> 
+  dplyr::mutate(taxaName = paste0(vernacularName, " (", 
+                                  scientificName_gbif, ")"))
+# Subset again for select federal status
+# Endangered
+fedE <- status_fxn("Fed-E", "Endangered")
+# Threatened
+fedT <- status_fxn("Fed-T", "Threatened")
+# Candidate
+fedC <- status_fxn("Fed-C", "Candidate")
+# Under Review
+fedUR <- status_fxn("Fed-UR", "Under Review")
+# Delisted, Monitoring (5-yr plan)
+fedDM <- status_fxn("Fed-DM", "Delisted, Monitoring (5-yr plan)")
+# Extinct species
+fedD3A <- status_fxn("Fed-D3A", "Extinct")
+
+# Create table 
+fedTable <- aoaFedList |>
+  dplyr::filter(taxonID %in% parkFedList$itisID & 
+                  fedStatus %in% fedStatus_priority) |> 
+  dplyr::group_by(fedStatus) |> 
+  dplyr::count(name = 'species_n') |> 
+  merge(fedDefs[fedDefs$code %in% fedStatus_priority, ], 
+        by.x = "fedStatus", by.y = "code", all.x = TRUE, all.y = TRUE, ) |> 
+  dplyr::select(fedStatus, definition, species_n) |> 
+  dplyr::mutate(fedStatus = factor(fedStatus, levels = fedStatus_priority)) |> 
+  dplyr::arrange(fedStatus)
+fedTable[is.na(fedTable$species_n), 'species_n'] <- 0
+```
+
+The following tables summarize observations occurring within the park boundary.
+There are `r ifelse(nrow(fedE) == 0, 'no', nrow(fedE))` federally-listed endangered, `r ifelse(nrow(fedT) == 0, 'no', nrow(fedT))` threatened, and `r ifelse(nrow(fedC) == 0, 'no', nrow(fedC))` candidate species, `r ifelse(nrow(fedUR) == 0, 'no', nrow(fedUR))` species that have been petitioned or are in review of candidate status, and `r ifelse(nrow(fedDM) == 0, 'no', nrow(fedDM))` species that have a 5-year recovery plan recorded within the boundary of `r params$UnitName`.
+
+```{r printTables2, results='hold'}
+myTable(fedTable, 
+        col_names = c("Status", "Definition", "Number of species"), 
+        caption = "Number of species by federal conservation status observed in the Park")
+```
+
+The following table and figures are for species of concern recorded within the park boundary.
+
+```{r sppConcern, results='hold'}
+sppConcern <- aoaFedList |>
+  dplyr::filter(taxonID %in% parkFedList$itisID & 
+                  fedStatus %in% fedStatus_priority) |>
+  dplyr::select(taxonID) |> 
+  merge(sppList, by.x = "taxonID", by.y = "itisID", 
+        all.x = TRUE, all.y = FALSE) |> 
+  dplyr::select(taxonID, scientificName_gbif, vernacularName, fedStatus,
+                park:km30) |> 
+  dplyr::mutate(fedStatus = factor(fedStatus, levels = fedStatus_priority), 
+                abundance = ifelse(park > 8, 'common', 'rare')) |> 
+  dplyr::arrange(fedStatus, scientificName_gbif)
+
+myTable(dplyr::select(sppConcern, scientificName_gbif, vernacularName,
+                      fedStatus) |> dplyr::distinct(),
+        col_names = c("Scientific Name", "Common Name", "Federal Status"), 
+        caption = "List of species of concern")
+```
+
+## Phenology of Speceis of Concern Observations
+
+```{r phenology}
+spp_df <- merge(sppConcern[, c('taxonID', 'scientificName_gbif',
+                               'vernacularName', 'fedStatus')], 
+                sppList[, c('taxonKey_gbif', 'itisID', 'kingdom_gbif', 
+                            'class_gbif', 'sort2021_eBird')], 
+                by.x = 'taxonID', by.y = 'itisID', 
+                all.x = TRUE, all.y = FALSE) |> 
+  merge(sf::st_drop_geometry(gbif_sf[, c('taxonKey', 'dayOfYear')]), 
+        by.x = 'taxonKey_gbif', by.y = 'taxonKey', 
+        all.x = TRUE, all.y = FALSE) |> 
+  tibble::tibble()
+
+# set up for labeling x axis by month
+ticks = tibble::tibble(ticks = lubridate::date(c("2020-01-15",
+                                                 "2020-03-15",
+                                                 "2020-05-15",
+                                                 "2020-07-15",
+                                                 "2020-09-15",
+                                                 "2020-11-15")),
+                       mon = lubridate::month(ticks, label = T),
+                       jul = lubridate::yday(ticks))
+
+spp_status <- unique(spp_df$fedStatus)[order(fedStatus_priority)]
+spp_status <- spp_status[!is.na(spp_status)]
+
+# Phenology
+lapply(spp_status, function(status){
+  tmp_df <- spp_df[spp_df$fedStatus == status, ] |>
+    dplyr::arrange(kingdom_gbif, class_gbif, sort2021_eBird, 
+                       scientificName_gbif) |> 
+    dplyr::mutate(taxon = ifelse(is.na(vernacularName), scientificName_gbif,
+                                 vernacularName))
+  tmp_df$taxon <- factor(tmp_df$taxon, levels = unique(tmp_df$taxon), 
+                         ordered = TRUE)
+  if(length(unique(tmp_df$taxonID)) > sppPage){
+    npages <- ceiling(length(unique(tmp_df$taxonID)) / sppPage)
+    figpages <- vector("list", length = npages)
+    tmp_taxa <- unique(tmp_df$taxonID)
+    for(i in 1:npages){
+      offset <- (i - 1) * sppPage
+      pagetaxa <- tmp_taxa[(offset + 1):(offset + sppPage)]
+      pagetmp <- tmp_df[tmp_df$taxonID %in% pagetaxa, ]
+      figpages[[i]] <- ggplot2::ggplot(pagetmp, ggplot2::aes(x = dayOfYear, 
+                                                             y = taxon)) +
+        ggplot2::geom_point() +
+        ggplot2::scale_x_continuous(breaks = ticks$jul, labels = ticks$mon) +
+        ggplot2::xlab("Day of Year") + ggplot2::ylab("Species Name") +
+        ggplot2::scale_y_discrete(limits = rev) +
+        ggplot2::ggtitle(paste0(
+          "Seasonality of ", status, " Species for\n", params$UnitName
+          ))
+      }
+    
+    for (i in 1:npages){
+      plot(figpages[[i]])
+      # ggplot2::ggsave(paste0(params$UnitCode, "_", status, "_Phenology_page", 
+      #                        i, ".png"),
+      #                 figpages[[i]], path = here::here("Figures"))
+      }
+    
+    } else({
+      ggplot2::ggplot(tmp_df, ggplot2::aes(x = dayOfYear, y = taxon)) +
+        ggplot2::geom_point() +
+        ggplot2::scale_x_continuous(breaks = ticks$jul, labels = ticks$mon) +
+        ggplot2::scale_y_discrete(limits = rev) +
+        ggplot2::xlab("Day of Year") + ggplot2::ylab("Species Name") +
+        ggplot2::ggtitle(paste0(
+          "Seasonality of ", status, " Species for\n", params$UnitName
+          ))
+      # ggplot2::ggsave(paste0(params$UnitCode, "_", status, "_Phenology.png"),
+      #                 figpages[[i]], path = here::here("Figures"))
+    })
+})
+```
+
+## Occurrence Maps
+
+Occurrence maps for Federally-listed Endangered, Threatened, Candidate, and proposed Endangered or Threatened, and species under recovery plans that have been recorded within the park boundary. 
+
+```{r occMap, results='hold'}
+createMaps<-function(dat_sf){
+  sppName <- unique(dat_sf$scientificName_gbif)
+  commName <- unique(dat_sf$vernacularName)
+  status <- unique(dat_sf$fedStatus)
+  mapTitle <- htmltools::tags$div(
+    htmltools::HTML(paste0("<em>", commName, " (", sppName, "; ", status,
+                           ")", "</em>"))
+    )
+  aoaMap |>
+    leaflet::addMarkers(data = dat_sf$geometry) |>
+    leaflet::addScaleBar(position = "bottomleft") |>
+    leaflet::addControl(mapTitle, position = "topright")
+}
+
+# Create set of leaflet maps:  NOTE: this is skeleton code that needs to be refined
+spp_sf <- merge(sppConcern[sppConcern$fedStatus %in% 
+                       c("Fed-E", "Fed-T", "Fed-C", "Fed-PE", "Fed-PT", 
+                         "Fed-UR"), ],
+                sppList[, c('itisID', 'taxonKey_gbif')], 
+                by.x = "taxonID", by.y = "itisID", 
+                all.x = TRUE, all.y = FALSE) |> 
+  merge(gbif_sf[, c('taxonKey', 'gbifID', 'geometry')], 
+        by.x = 'taxonKey_gbif', by.y = 'taxonKey', 
+        all.x = TRUE, all.y = FALSE)
+maps <- lapply(unique(spp_sf$taxonKey_gbif), function(x){
+  dat <- spp_sf[spp_sf$taxonKey_gbif == x, ]
+  createMaps(dat)
+})
+
+htmltools::tagList(maps)
+```
+
+# Citations
+
+Chamberlain S, Barve V, Mcglinn D, Oldoni D, Desmet P, Geffert L, Ram K (2022). 
+  rgbif: Interface to the Global Biodiversity Information Facility API. 
+  R package version 3.7.2,
+  <https://CRAN.R-project.org/package=rgbif>.
+  
+DeVivo, J. C. (2019). 
+  Inventories 2.0: A plan for the next generation of NPS natural resource
+  inventories.
+  Natural Resource Report 
+  NPS/NRSS/NRR---2019/2007.
+  National Park Service, Fort Collins, Colorado.
+  <https://irma.nps.gov/DataStore/Reference/Profile/2266646>
+
+DeVivo J. C. (2021a).
+  Federal Listing Status of Taxa in National Park Service Units for use in
+  Determining Appropriate Release of Data (Approved Dataset).
+  Tabular Dataset.
+  National Park Service, Fort Collins, Colorado. 
+  <https://irma.nps.gov/DataStore/Reference/Profile/2272462>.
+
+DeVivo J. C. (2021b).
+  State, Territory, and NatureServe Listing Status of Taxa in National Park
+  Service Units for use in Determining Appropriate Release of Data (Approved
+  Dataset).
+  Tabular Dataset.
+  National Park Service, Fort Collins, Colorado.
+  <https://irma.nps.gov/DataStore/Reference/Profile/2272464>.
+
+`r rgbif::gbif_citation(params$Key)$download`
+
+Kari E. A. Norman, Scott Chamberlain, and Carl Boettiger (2020).
+  taxadb: A high-performance local taxonomic database interface. 
+  Methods in Ecology and Evolution, 11(9), 1153-1159.
+  doi:10.1111/2041-210X.13440.
+
+Kinseth, M and L. Nelson (2022).
+  Boundary-derived Areas of Analysis for National Park Service Units, Fall 2021.
+  NPS/NRSS/DRR---2022/3.
+  <https://irma.nps.gov/DataStore/Reference/Profile/2287628>.
+
+National Park Service Inventory and Monitoring Division (NPS-IMD; 2021).
+  National Park Service NRSS Inventory and Monitoring Division (IMD) Management 
+  Areas Inventory Data Services.
+  National Park Service Data Store
+  <https://irma.nps.gov/DataStore/Reference/Profile/2286496>.
+
+National Park Service Inventory and Monitoring Division (NPS-IMD; 2022).
+  NPS Unit Boundary-derived Areas of Analysis, Fall 2021.
+  National Park Service Data Store.
+  <https://irma.nps.gov/DataStore/Reference/Profile/2287631>.
+
+R Core Team (2022). R: A language and environment for statistical
+  computing. R Foundation for Statistical Computing, Vienna, Austria. URL
+  <https://www.R-project.org/>.
+
+# Session
+
+This report was generated on `r lubridate::now()`. 
+R session information is printed below.
+
+```{r session, results='hold'}
+sessionInfo()
+```
+
+```{r saveData}
+save(gbif_sf, sppList, sppConcern, file = "sppPull.RData")
+```

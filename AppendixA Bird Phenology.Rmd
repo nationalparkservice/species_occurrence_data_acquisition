@@ -1,0 +1,148 @@
+---
+title: "Appendix A. Bird Phenology"
+author:
+  - name: "Matthew Van Scoyoc" 
+  - name: "Tom Philippi" 
+  - name: "Lisa Nelson" 
+    affiliation: |
+      | NPS Inventory Program
+      | NPS Inventory & Monitoring Division
+      | 1201 Oakridge, Suite 150
+      | Fort Collins, Colorado
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+params:
+  UnitCode: "PARK"
+  UnitName: "National Park Unit Name"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+---
+
+```{r setup, eval=TRUE, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+#-- Global settings
+options(timeout = 600)
+gc() # Call a garbage collection to free up memory
+
+#-- knitr
+# Set global options for RMarkdown
+knitr::opts_chunk$set(eval = TRUE, 
+                      echo = FALSE, 
+                      results = 'hide', 
+                      comment = "",
+                      message=FALSE, 
+                      warning=FALSE,
+                      fig.path = "Figures/",
+                      tidy = TRUE, 
+                      tidy.opts = list(width.cutoff = 60), 
+                      cache = FALSE)
+ 
+#-- Packages
+# R packages used in this script
+pkgLst <- c("dplyr",       # data management
+            "lubridate",   # dating
+            "sf",          # spatial functions
+            "tibble")       # data management
+
+#-- Install
+# Install packages if they aren't in your library
+instPkgs <- pkgLst %in% rownames(installed.packages())
+if (any(instPkgs == FALSE)) {
+  install.packages(pkgLst[!instPkgs], 
+                   lib =  .libPaths()[1], 
+                   repos = "https://cloud.r-project.org",
+                   type = 'source', 
+                   dependencies = TRUE, 
+                   quiet = TRUE)
+}
+
+# Load packages into work space
+# Note: This script is written so the packages do not need to be loaded.
+#     Comment out the next line if you want to supress loading packages.
+invisible(lapply(pkgLst, library, character.only = TRUE))
+
+#-- ggplot2 theme
+ggplot2::theme_set(ggplot2::theme_bw())
+ggplot2::theme_update(plot.title = ggplot2::element_text(hjust = 0.5))
+sppPage <- 40
+
+#-- Load data
+load("sppPull.RData")
+```
+
+# Bird Phenology
+
+```{r birdPhenology, results='hold'}
+parkCount <- sf::st_drop_geometry(gbif_sf) |>
+  dplyr::filter(locale == 'park' & taxonRank == 'SPECIES') |>
+  dplyr::select(taxonKey, gbifID) |>
+  dplyr::group_by(taxonKey) |>
+  dplyr::count() |>
+  dplyr::mutate(abundance = ifelse(n <= 8, 'rare', 'common')) |> 
+  merge(sppList, by.x = "taxonKey", by.y = "taxonKey_gbif", 
+        all.x = TRUE, all.y = FALSE)
+
+birdsDoYs_park <- sf::st_drop_geometry(gbif_sf) |>
+  dplyr::filter(locale == 'park' & class == 'Aves' &
+                  taxonRank %in% c('SPECIES', 'SUBSPECIES') & 
+                  occurrenceStatus == 'PRESENT') |>
+  dplyr::select(taxonKey, gbifID, date, dayOfYear) |>
+  merge(sppList, by.x = "taxonKey", by.y = "taxonKey_gbif", 
+        all.x = TRUE, all.y = FALSE) |> 
+  dplyr::arrange(sort2021_eBird)
+
+# set up for labeling x axis by month
+ticks = tibble::tibble(ticks = lubridate::date(c("2020-01-15",
+                                                 "2020-03-15",
+                                                 "2020-05-15",
+                                                 "2020-07-15",
+                                                 "2020-09-15",
+                                                 "2020-11-15")),
+                       mon = lubridate::month(ticks, label = T),
+                       jul = lubridate::yday(ticks))
+
+birds <- dplyr::select(birdsDoYs_park, scientificName_gbif, 
+                       vernacularName, sort2021_eBird) |>
+  dplyr::filter(!vernacularName == "") |> 
+  dplyr::distinct() |> 
+  dplyr::arrange(sort2021_eBird)
+
+npages <- ceiling(nrow(birds) / sppPage)
+figpages <- vector("list", length = npages)
+for (i in 1:npages) {
+  offset <- (i - 1) * sppPage
+  pagetaxa <- birds[(offset + 1):(offset + sppPage), "vernacularName"]
+  pagetmp <- birdsDoYs_park[birdsDoYs_park$vernacularName %in% pagetaxa, ] |>
+    dplyr::arrange(sort2021_eBird)
+  pagetmp$taxon <-factor(pagetmp$vernacularName, 
+                         levels = pagetaxa, ordered = TRUE)
+  figpages[[i]] <- ggplot2::ggplot(pagetmp,
+                                   ggplot2::aes(x = dayOfYear, y = taxon)) +
+    ggplot2::geom_point() +
+    ggplot2::scale_x_continuous(breaks = ticks$jul, labels = ticks$mon) +
+    ggplot2::xlab("Day of Year") + ggplot2::ylab("Common Name") +
+    ggplot2::scale_y_discrete(limits = rev) +
+    ggplot2::ggtitle(paste0(
+      "Seasonality of eBird Observations by Species\nfor ",
+      params$UnitName
+    ))
+}
+
+for (i in 1:npages) {
+  plot(figpages[[i]])
+  # ggplot2::ggsave(paste0(params$UnitCode, "_birdPhenology_page", i, ".svg"),
+  #                 figpages[[i]], path = here::here("Figures"))
+  ggplot2::ggsave(paste0(params$UnitCode, "_birdPhenology_page", i, ".png"),
+                  figpages[[i]], path = here::here("Figures"))
+}
+```
+
+# Session
+
+This report was generated on `r lubridate::now()`. 
+R session information is printed below.
+
+```{r session, results='hold'}
+sessionInfo()
+```

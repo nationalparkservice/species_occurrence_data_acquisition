@@ -1,11 +1,6 @@
----
-title: "Species Occurrence Data Acquisition for Species Inventories"
-editor_options: 
-  markdown: 
-    wrap: 80
----
+# Species Occurrence Data Acquisition for Species Inventories
 
-This is Species Occurrence Data Acquisition (SODA), a repository used by the
+Welcome to Species Occurrence Data Acquisition (SODA), a repository used by the
 Inventory & Monitoring Division's Species Inventory Team (NPS WASO NRSS) to
 download species occurrence data from external sources for species occurrence
 data requests by National Park units.

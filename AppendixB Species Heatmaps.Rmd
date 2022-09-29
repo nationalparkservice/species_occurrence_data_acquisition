@@ -1,0 +1,240 @@
+---
+title: "Appendix A. Speceis Heatmpas"
+author:
+  - name: "Matthew Van Scoyoc" 
+  - name: "Tom Philippi" 
+  - name: "Lisa Nelson" 
+    affiliation: |
+      | NPS Inventory Program
+      | NPS Inventory & Monitoring Division
+      | 1201 Oakridge, Suite 150
+      | Fort Collins, Colorado
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+params:
+  UnitCode: "PARK"
+  UnitName: "National Park Unit Name"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+---
+
+```{r setup, eval=TRUE, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+#-- Global settings
+options(timeout = 600)
+gc() # Call a garbage collection to free up memory
+
+#-- knitr
+# Set global options for RMarkdown
+knitr::opts_chunk$set(eval = TRUE, 
+                      echo = FALSE, 
+                      results = 'hide', 
+                      comment = "",
+                      message=FALSE, 
+                      warning=FALSE,
+                      fig.path = "Figures/",
+                      tidy = TRUE, 
+                      tidy.opts = list(width.cutoff = 60), 
+                      cache = FALSE)
+ 
+#-- Packages
+# R packages used in this script
+pkgLst <- c("dplyr",       # data management
+            "lubridate",   # dating
+            "sf",          # spatial functions
+            "tibble",      # data structures
+            "tidyr")       # data management
+
+#-- Install
+# Install packages if they aren't in your library
+instPkgs <- pkgLst %in% rownames(installed.packages())
+if (any(instPkgs == FALSE)) {
+  install.packages(pkgLst[!instPkgs], 
+                   lib =  .libPaths()[1], 
+                   repos = "https://cloud.r-project.org",
+                   type = 'source', 
+                   dependencies = TRUE, 
+                   quiet = TRUE)
+}
+
+# Load packages into work space
+# Note: This script is written so the packages do not need to be loaded.
+#     Comment out the next line if you want to supress loading packages.
+# invisible(lapply(pkgLst, library, character.only = TRUE))
+
+#-- ggplot2 theme
+ggplot2::theme_set(ggplot2::theme_bw())
+ggplot2::theme_update(plot.title = ggplot2::element_text(hjust = 0.5))
+sppPage <- 40
+
+#-- Load data
+load("sppPull.RData")
+
+#-- Functions
+# glueVector returns a string of text with comma's between each value
+glueVector <- function(v) {
+  if (length(v) == 1){
+    as.character(v)
+  } else if (length(v) == 2){
+    glue::glue("{v[1]} and {v[2]}")
+  } else {
+    glue::glue("{paste(v[1:length(v) - 1], collapse = ', ')}, and {v[length(v)]}")
+  }
+}
+```
+
+# Common Species
+
+Observation density heatmaps of common animal species from GBIF records.
+
+```{r commonSpp}
+parkCount <- sf::st_drop_geometry(gbif_sf) |>
+  dplyr::filter(locale == 'park' & taxonRank %in% c('SPECIES', 'SUBSPECIES')) |>
+  dplyr::select(taxonKey, gbifID) |>
+  dplyr::group_by(taxonKey) |>
+  dplyr::count() |>
+  dplyr::mutate(abundance = ifelse(n <= 8, 'rare', 'common')) |> 
+  merge(sppList, by.x = "taxonKey", by.y = "taxonKey_gbif", 
+        all.x = TRUE, all.y = FALSE) |> 
+  dplyr::arrange(kingdom_gbif, phylum_gbif, class_gbif, order_gbif, family_gbif, 
+                 genus_gbif, sort2021_eBird, scientificName_gbif)
+
+# Subset data
+spp_list <- dplyr::filter(parkCount, 
+                          abundance == 'common' & kingdom_gbif == 'Animalia')
+spp_df <- sf::st_drop_geometry(gbif_sf) |>
+  dplyr::filter(taxonKey %in% spp_list$taxonKey) |>
+  dplyr::arrange(kingdom, phylum, class, order, family, genus, species) |> 
+  dplyr::filter(!species == "")
+
+# Make density dataframe
+dens_df <- stats::aggregate(dayOfYear ~ species,
+                            data = spp_df,
+                            FUN = function(x) density(x,
+                                                      kernel = 'epanechnikov',
+                                                      n = 365, from = 1,
+                                                      to = 365,
+                                                      na.rm = TRUE)[['y']])
+doy_dens <- data.frame(
+  species = rep(dens_df$species, each = 365),
+  dayOfYear = rep(1:365, times = nrow(dens_df)),
+  dens =  as.vector(rbind(dens_df[, 2]))
+)
+
+# set up for labeling x axis by month
+ticks = tibble::tibble(ticks = lubridate::date(c("2020-01-15",
+                                                 "2020-03-15",
+                                                 "2020-05-15",
+                                                 "2020-07-15",
+                                                 "2020-09-15",
+                                                 "2020-11-15")),
+                       mon = lubridate::month(ticks, label = T),
+                       jul = lubridate::yday(ticks))
+
+# Plot data
+lapply(unique(spp_list$class_gbif), function(my_class){
+  tmp_ls <- spp_list[spp_list$class_gbif == my_class, ]
+  tmp_df <- spp_df[spp_df$species %in% tmp_ls$scientificName_gbif, ]
+  tmp_doy <- doy_dens[doy_dens$species %in% tmp_ls$scientificName_gbif, ]
+  npages <- ceiling(length(unique(tmp_doy$species)) / sppPage)
+  figpages <- vector("list", length = npages)
+  for (i in 1:npages) {
+    offset <- (i - 1) * sppPage
+    pagetaxa <- tmp_ls[(offset + 1):(offset + sppPage), ]
+    pagetmp <- tmp_doy[tmp_doy$species %in% pagetaxa$scientificName_gbif, ]
+    pagetmp$taxon <- factor(pagetmp$species,
+                            levels = pagetaxa$scientificName_gbif,
+                            ordered = TRUE)
+    figpages[[i]] <- ggplot2::ggplot(pagetmp, 
+                                     ggplot2::aes(x = dayOfYear, y = species, 
+                                                  fill = dens)) +
+      ggplot2::geom_tile() +
+      ggplot2::scale_fill_gradient(low = 'white', high = 'red') +
+      ggplot2::scale_x_continuous(breaks = ticks$jul, labels = ticks$mon) +
+      ggplot2::guides(fill = ggplot2::guide_colourbar(title = "Observations")) +
+      ggplot2::xlab("Day of Year") + ggplot2::ylab("Scientific Name") +
+      ggplot2::ggtitle(paste0(
+        "Seasonality for ", my_class, " Observations by Species\nfor ",
+        params$UnitName
+      ))
+    }
+  # Print heatmaps
+  for (i in 1:length(figpages)) {
+    plot(figpages[[i]])
+    ggplot2::ggsave(paste0("common", my_class, "_", i, ".png"),
+                    figpages[[i]], path = here::here("Figures"))
+
+    }
+  })
+```
+
+# Rare Species
+
+Occurrence count heatmaps of rare animal species from GBIF records.
+
+```{r rareSpp}
+# Subset data
+rare_list <- dplyr::filter(parkCount,
+                           abundance == 'rare' & kingdom_gbif == 'Animalia')
+
+rare_df <- sf::st_drop_geometry(gbif_sf) |>
+  dplyr::filter(taxonKey %in% rare_list$taxonKey) |>
+  dplyr::arrange(kingdom, phylum, class, order, family, genus, species) |> 
+  dplyr::group_by(species, dayOfYear) |>
+  dplyr::count(species) |> 
+  dplyr::filter(!species == "")
+
+rare_doy <- data.frame(
+  species = rep(unique(rare_df$species), each = 365),
+  dayOfYear = rep(1:365, times = length(unique(rare_df$species)))
+  ) |>
+  dplyr::left_join(rare_df, by = c('species', 'dayOfYear'))
+rare_doy[, 'n'][is.na(rare_doy[, 'n'])] <- 0
+
+
+# Plot data
+lapply(unique(rare_list$class_gbif), function(my_class){
+  tmp_ls <- rare_list[rare_list$class_gbif == my_class, ]
+  tmp_df <- rare_df[rare_df$species %in% tmp_ls$scientificName_gbif, ]
+  tmp_doy <- rare_doy[rare_doy$species %in% tmp_ls$scientificName_gbif, ]
+  npages <- ceiling(length(unique(tmp_doy$species)) / sppPage)
+  figpages <- vector("list", length = npages)
+  for (i in 1:npages) {
+    offset <- (i - 1) * sppPage
+    pagetaxa <- tmp_ls[(offset + 1):(offset + sppPage), ]
+    pagetmp <- tmp_doy[tmp_doy$species %in% pagetaxa$scientificName_gbif, ]
+    pagetmp$taxon <- factor(pagetmp$species,
+                            levels = pagetaxa$scientificName_gbif,
+                            ordered = TRUE)
+    figpages[[i]] <- ggplot2::ggplot(pagetmp, 
+                                     ggplot2::aes(x = dayOfYear, y = species, 
+                                                  fill = n)) +
+      ggplot2::geom_tile() +
+      ggplot2::scale_fill_gradient(low = 'white', high = 'red') +
+      ggplot2::scale_x_continuous(breaks = ticks$jul, labels = ticks$mon) +
+      ggplot2::guides(fill = ggplot2::guide_colourbar(title = "Observations")) +
+      ggplot2::xlab("Day of Year") + ggplot2::ylab("Scientific Name") +
+      ggplot2::ggtitle(paste0(
+        "Seasonality for ", my_class, " Observations by Species\nfor ",
+        params$UnitName
+      ))
+    }
+  # Print heatmaps
+  for (i in 1:length(figpages)) {
+    plot(figpages[[i]])
+    ggplot2::ggsave(paste0("rare", my_class, "_", i, ".png"),
+                    figpages[[i]], path = here::here("Figures"))
+
+    }
+  })
+```
+
+# Session
+
+This report was generated on `r lubridate::now()`. 
+R session information is printed below.
+
+```{r session, results='hold'}
+sessionInfo()
+```
