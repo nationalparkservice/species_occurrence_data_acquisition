@@ -36,3 +36,6 @@ vignettes/*.pdf
 #-- Other files
 # Temporary geo-json data files
 /**/temp.geojson
+
+#-- Park subdirectories
+/VALL
