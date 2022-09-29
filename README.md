@@ -31,6 +31,27 @@ Products produced from this workflow include:
 
 For now, each park unit for which a species occurrence data request will be conducted will have it's own sub-directory. Copies of the Rmarkdown files (Rmd) in the main directory will be in that sub-directory and customized for that specific park unit. These sub-directorywill not be pushed to this repository due to the large file sizes and sensitive data involved in these projects. Versions of the Rmd's in the the main directory will be updated with new features as they are developed.
 
+## Intended directory structure
+
+Main directory
+
+\|- Conservation Lists (sub-directory)  
+\|- FederalConservationListTaxa_2272462-datapackage (sub-directory)  
+\|- FederalConservationListTaxa_for_Data_Protection_2272462-data.csv  
+\|- FederalConservationListTaxa_for_Data_Protection_2272462-manifest.txt  
+\|- FederalConservationListTaxa_for_Data_Protection_2272462-metadata.xml  
+\|- StateNSclean_2272464-datapackage (sub-directory)  
+\|- StateNSclean_2272464-data.csv  
+\|- StateNSclean_2272464-manifest.txt  
+\|- StateNSclean_2272464-metadata.xml  
+\|- Taxa Lists  
+\|- duckdb (database from taxadb)  
+\|- eBird-Clements-v2021-integrated-checklist-August-2021.csv  
+\|- PARK  
+\|- AppendixA Bird Phenology.Rmd  
+\|- AppendixB Species Heatmaps.Rmd  
+\|- PARK_sppPull.Rmd
+
 # In the future
 
 ## External Repositories
