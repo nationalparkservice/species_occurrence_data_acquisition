@@ -589,7 +589,7 @@ sppList <- sppList |>
 Federal and State species conservation lists were obtained from [NPS Integrated Resource Management Applications (IRMA) Data Store](https://irma.nps.gov/DataStore/) (DeVivo 2021a, DeVivo 2021b).
 ITIS ID's were assigned to the *CleanSourceSci* field and used to match with the IDIS ID from the clean speciies names created from the GBIF data because the species names fields from the conservation lists and the GBIF data don't match neatly.
 
-```{r conservLists}
+```{r conservLists, eval=TRUE}
 # Read federal and state lists of species of conservation concern
 # Data are read into R from an *.RData file.
 # See ../Conservation Lists/conservationLists.R for details.
@@ -646,6 +646,8 @@ sppList <- merge(sppList,
 #-- Close database connection
 taxadb::td_disconnect()
 ```
+
+**TODO:** Evaluate the rest of the script and make sure it runs after the *eval* options have been included in the chunk headers.
 
 ```{r sppList}
 localeCount <- sf::st_drop_geometry(gbif_sf) |> 
@@ -740,7 +742,7 @@ myTable(fedTable,
 
 The following table and figures are for species of concern recorded within the park boundary.
 
-```{r sppConcern, results='hold'}
+```{r sppConcern, eval=FALSE, results='hold'}
 sppConcern <- aoaFedList |>
   dplyr::filter(taxonID %in% parkFedList$itisID & 
                   fedStatus %in% fedStatus_priority) |>
@@ -761,7 +763,7 @@ myTable(dplyr::select(sppConcern, scientificName_gbif, vernacularName,
 
 ## Phenology of Speceis of Concern Observations
 
-```{r phenology}
+```{r phenology, eval=FALSE}
 spp_df <- merge(sppConcern[, c('taxonID', 'scientificName_gbif',
                                'vernacularName', 'fedStatus')], 
                 sppList[, c('taxonKey_gbif', 'itisID', 'kingdom_gbif', 
@@ -840,7 +842,7 @@ lapply(spp_status, function(status){
 
 Occurrence maps for Federally-listed Endangered, Threatened, Candidate, and proposed Endangered or Threatened, and species under recovery plans that have been recorded within the park boundary. 
 
-```{r occMap, results='hold'}
+```{r occMap, eval=FALSE, results='hold'}
 createMaps<-function(dat_sf){
   sppName <- unique(dat_sf$scientificName_gbif)
   commName <- unique(dat_sf$vernacularName)
