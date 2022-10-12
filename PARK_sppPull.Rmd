@@ -589,7 +589,7 @@ sppList <- sppList |>
 Federal and State species conservation lists were obtained from [NPS Integrated Resource Management Applications (IRMA) Data Store](https://irma.nps.gov/DataStore/) (DeVivo 2021a, DeVivo 2021b).
 ITIS ID's were assigned to the *CleanSourceSci* field and used to match with the IDIS ID from the clean speciies names created from the GBIF data because the species names fields from the conservation lists and the GBIF data don't match neatly.
 
-```{r conservLists}
+```{r conservLists, eval=TRUE}
 # Read federal and state lists of species of conservation concern
 # Data are read into R from an *.RData file.
 # See ../Conservation Lists/conservationLists.R for details.
