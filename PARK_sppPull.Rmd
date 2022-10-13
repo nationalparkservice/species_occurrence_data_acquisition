@@ -125,28 +125,30 @@ collpaseList <- function(conservDF, speciesList){
   return(newDF)
 }
 
-#-- getAOAFeature
-# Downloads NPS Inventory and Monitoring area of analysis for the park unit of 
-#     interest.
-# aoaExtent options: "park", "km3", "km30"
-getAOAFeature <- function(UnitCode, aoaExtent="km30", lifecycle = "Active") {
+# Example Calls:
+#   unitBound <- getBoundFeature(params$UnitCode, aoaExtent = "npsBounds")
+#   test <- getBoundFeature("CACH", "npsBounds")
+getBoundFeature <- function(UnitCode, aoaExtent="npsBound", lifecycle = "Active") {
   tempOutput <- file.path("temp.geojson")
-  
   featureServiceURLs <-
-    list("park" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_park_AOA_nad_py/FeatureServer/0",
-         "km3" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_3km_AOA_nad_py/FeatureServer/1",
-         "km30" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_30km_AOA_nad_py/FeatureServer/2"
+    list("park" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_park_AOA_nad_py/FeatureServer/0", #park AOAs
+         "km3" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_3km_AOA_nad_py/FeatureServer/1", # 3km AOAs
+         "km30" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/IMD_BND_ALL_UNITS_30km_AOA_nad_py/FeatureServer/2", # 30km AOAs
+         "npsBound" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/2", # NPS unit boundary polygons, updated quarterly
+         "npsTract" = "https://services1.arcgis.com/fBc8EJBxQRMcHlei/arcgis/rest/services/NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service/FeatureServer/1" #NPS unit tract polygons, updated quarterly
          )
   
   # Request feature in WGS83 spatial reference (outSR=4326)
-  featureServicePathInfo <- paste0(
-    'query?where=UNITCODE+%3D+%27', UnitCode,
-    '%27&outFields=*&returnGeometry=true&outSR=4326&FeatureLifecycle="',
-    lifecycle, '"&f=pjson'
-    )
+  if (aoaExtent == 'npsBound' | aoaExtent == 'npsTract') {
+    featureServicePathInfo <- paste0('query?where=UNIT_CODE+%3D+%27', UnitCode,
+                                   '%27&outFields=*&returnGeometry=true&outSR=4326&f=pjson')
+  }
+  else {
+    featureServicePathInfo <- paste0('query?where=UNITCODE+%3D+%27', UnitCode,
+                                   '%27&outFields=*&returnGeometry=true&outSR=4326&f=pjson')
+  }
   featureServiceRequest <- paste(featureServiceURLs[[aoaExtent]],
                                  featureServicePathInfo, sep = "/" )
-
   print(featureServiceRequest)
   geoJSONFeature <- jsonlite::fromJSON(featureServiceRequest)
   
@@ -154,9 +156,9 @@ getAOAFeature <- function(UnitCode, aoaExtent="km30", lifecycle = "Active") {
   jsonFeature <- download.file(featureServiceRequest, tempOutput, mode = "w")
   # For rgdal 1.2+, layer (format) does not need to be specified
   featurePoly <- sf::st_read(dsn = tempOutput)
-  # featurePoly <- rgdal::readOGR(dsn = tempOutput)
-  #featurePoly <- rgdal::readOGR(dsn = tempOutput, layer = "OGRGeoJSON")
+  # featurePoly <- readOGR(dsn = tempOutput)
   
+  #featurePoly <- readOGR(dsn = tempOutput, layer = "OGRGeoJSON")
   return(featurePoly)
 }
 
@@ -211,9 +213,9 @@ This approach provides three tiers of species occurrence data: 1) species that h
 tileURL  <- 'https://atlas-stg.geoplatform.gov/styles/v1/atlas-user/ck58pyquo009v01p99xebegr9/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiYXRsYXMtdXNlciIsImEiOiJjazFmdGx2bjQwMDAwMG5wZmYwbmJwbmE2In0.lWXK2UexpXuyVitesLdwUg&'
 
 # Pull area of analysis features
-aoaPark <- getAOAFeature(UnitCode = params$UnitCode, aoaExtent = "park")
-aoa3k <- getAOAFeature(UnitCode = params$UnitCode, aoaExtent = "km3")
-aoa30k <- getAOAFeature(UnitCode = params$UnitCode, aoaExtent = "km30")
+aoaPark <- getBoundFeature(UnitCode = params$UnitCode, aoaExtent = "park")
+aoa3k <- getBoundFeature(UnitCode = params$UnitCode, aoaExtent = "km3")
+aoa30k <- getBoundFeature(UnitCode = params$UnitCode, aoaExtent = "km30")
 
 # Set CRS
 if(isTRUE(sf::st_crs(aoaPark) == sf::st_crs(aoa30k))) {
