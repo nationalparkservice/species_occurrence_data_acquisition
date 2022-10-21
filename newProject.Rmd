@@ -46,11 +46,14 @@ If the park sub-directory exists, you will get a warning message and the operati
 # New sub-directory
 parkDir <- paste(here::here(), params$UnitCode, sep = "/")
 
+# Choose between PARK_sppPull.Rmd and PARK_sppPull_short.Rmd
+myFile <- "PARK_sppPull.Rmd" 
+
 # Create new sub-directory and copy and rename files
 if(!dir.exists(parkDir)){
   dir.create(params$UnitCode)
   file.copy("PARK_sppPull.Rmd", parkDir, overwrite = F, copy.date = T)
-  file.rename(paste(parkDir, "PARK_sppPull.Rmd", sep = "/"),
+  file.rename(paste(parkDir, myFile, sep = "/"),
               paste(parkDir, paste0(params$UnitCode, "_sppPull.Rmd"), 
                     sep = "/"))
   file.copy("AppendixA Bird Phenology.Rmd", parkDir, 
