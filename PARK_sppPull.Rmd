@@ -125,9 +125,28 @@ collpaseList <- function(conservDF, speciesList){
   return(newDF)
 }
 
-# Example Calls:
-#   unitBound <- getBoundFeature(params$UnitCode, aoaExtent = "npsBounds")
-#   test <- getBoundFeature("CACH", "npsBounds")
+#' Download park boundary feature classes
+#' This function retrieves NPS boundaries from NPS online data sources that are
+#'     updated quarterly.
+#'
+#' @param UnitCode 4-character park unit code. Typically from params$UnitCode. 
+#' @param aoaExtent Extent of area to be downloaded. The default is npsBound. 
+#'     Options include the following:
+#'     \itemize{
+#'         \item \emph{park}: The park area of analysis (AOA); essentially the 
+#'             park boundary.
+#'         \item \emph{km3}: 3 km buffer AOA around the park AOA.
+#'             See \code{\link{import_daily}} for details.
+#'         \item \emph{km30}: 30 km buffer AOA around the park AOA.
+#'         \item \emph{npsBound}: The most up-to-date NPS park unit boundary 
+#'             polygon.
+#'         \item \emph{npsTract}: The most up-to-date NPS unit tract polygon.
+#'     }  
+#' @param lifecycle The lifecycle of the data.
+#'
+#' @return An sf object, polygon
+#' 
+#' @examples getBoundFeature(params$UnitCode, aoaExtent = "npsBounds")
 getBoundFeature <- function(UnitCode, aoaExtent="npsBound", lifecycle = "Active") {
   tempOutput <- file.path("temp.geojson")
   featureServiceURLs <-
@@ -162,8 +181,14 @@ getBoundFeature <- function(UnitCode, aoaExtent="npsBound", lifecycle = "Active"
   return(featurePoly)
 }
 
-#-- Glue vector
-# Returns a string of text with comma's between each value
+#' Glue vector
+#' This function returns a string of text with comma's between each value.
+#'
+#' @param v A vector of numbers or characters.
+#'
+#' @return A string of comma separated values.
+#'
+#' @examples glueVector(month.abb)
 glueVector <- function(v) {
   if (length(v) == 1){
     as.character(v)
@@ -174,8 +199,19 @@ glueVector <- function(v) {
   }
 }
 
-#-- myTable
-# Custom table
+#' Custom table
+#' This function uniformly formats tables for this Rmd. 
+#'
+#' @param myTable A dataframe.
+#' @param col_names A vector of column names.
+#' @param caption A sting of the caption.
+#'
+#' @return A kableExtra:kbl object.
+#'
+#' @examples 
+#' myTable(sppTable,
+#'         col_names = c("Kingdom", "Phylum", "Class", "Number of Species"),
+#'         caption = "Number of species by Class observed in the Park")
 myTable <- function(myTable, col_names, caption){
   kableExtra::kbl(myTable, col.names = col_names, caption = caption) |> 
   kableExtra::kable_styling(full_width = FALSE,
@@ -185,8 +221,14 @@ myTable <- function(myTable, col_names, caption){
   kableExtra::kable_minimal()
 }
 
-#-- wtkString
-# Creates a WTK string from a polygon
+#' Create a WTK string
+#' Creates a well-known text string from a polygon (sf object).
+#'
+#' @param myPolygon An sf polygon.
+#'
+#' @return A WTK string.
+#'
+#' @examples wtkString(aoaPark)
 wtkString <- function(myPolygon){
   sf::st_bbox(myPolygon) |> 
     sf::st_as_sfc() |> 
@@ -406,6 +448,8 @@ Clean species names were created using the Genus, specific epithet, and infraspe
 # Download and connect to species database using the taxadb package
 # Note: The following code downloads a new database if 1) the data base does not 
 #     exist and 2) if the data base if more than 90 days old "(90*24*60*60)"
+# Note: Try commenting out this first section (down to the next comment)if you 
+#     are getting errors when trying to connect to the duckdb.
 itisDB <- file.path("..", "Taxa Lists", "duckdb")
 if(file.exists(itisDB) & 
    (file.info(itisDB)$ctime > file.info(itisDB)$ctime + (90*24*60*60))){
