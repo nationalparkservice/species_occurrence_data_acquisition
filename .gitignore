@@ -14,7 +14,7 @@
 /*.tar.gz
 # Output files from R CMD check
 /*.Rcheck/
-# RStudio files
+# RStudio project files
 .Rproj.user/
 /**/.Rproj.user/
 *.Rproj
@@ -32,6 +32,8 @@ vignettes/*.pdf
 *.knit.md
 # R Environment Variables
 .Renviron
+# Intermediate RMarkdownd Notebook files
+*.nb.html
 
 #-- Other files
 # Temporary geo-json data files
@@ -39,3 +41,4 @@ vignettes/*.pdf
 
 #-- Park subdirectories
 /VALL
+/MISP
