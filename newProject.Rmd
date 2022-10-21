@@ -1,0 +1,78 @@
+---
+title: "Species Pull for Mill Springs Battlefield National Monument"
+author:
+- name: Matthew Van Scoyoc
+  affiliation: |
+    | NPS Species Inventory Program
+    | NPS Inventory & Monitoring Division
+    | 1201 Oakridge, Suite 150
+    | Fort Collins, Colorado
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+params:
+  UnitCode: MISP
+  UnitName: Mill Springs Battlefield National Monument
+---
+
+```{r setup, echo=FALSE}
+# Packages
+if (isFALSE("here" %in% rownames(installed.packages()))) {
+  install.packages("here", 
+                   lib =  .libPaths()[1], 
+                   repos = "https://cloud.r-project.org",
+                   type = 'source', 
+                   dependencies = TRUE, 
+                   quiet = TRUE)
+}
+```
+
+# Introduction
+
+This [R Markdown](http://rmarkdown.rstudio.com) Notebook creates and documents a new sub-directory for a species pull request.
+First, this document creates a sub-directory for the project. 
+Then PARK_sppPull.Rmd is copied to the new sub-directory and renamed by replacing 'PARK' with the park unit code.
+Appendices A and B are also copied to the new sub-directory. 
+And finally, this script opens the .gitignore file so the new sub-directory can be added to the list of ignored sub-directories so the project is not synced to GitHub.
+
+# New Project Sub-directory
+
+This first chunk looks to see if there is already a sub-directory for the park in your project folder. 
+If the park sub-directory does not exist, it creates the new sub-directory and copies and renames the Rmd files to the new sub-directory.
+If the park sub-directory exists, you will get a warning message and the operation will not create the new sub-directory or copy the Rmd files.
+
+```{r newDir, echo=TRUE, results='hide'}
+# New sub-directory
+parkDir <- paste(here::here(), params$UnitCode, sep = "/")
+
+# Create new sub-directory and copy and rename files
+if(!dir.exists(parkDir)){
+  dir.create(params$UnitCode)
+  file.copy("PARK_sppPull.Rmd", parkDir, overwrite = F, copy.date = T)
+  file.rename(paste(parkDir, "PARK_sppPull.Rmd", sep = "/"),
+              paste(parkDir, paste0(params$UnitCode, "_sppPull.Rmd"), 
+                    sep = "/"))
+  file.copy("AppendixA Bird Phenology.Rmd", parkDir, 
+            overwrite = F, copy.date = T)
+  file.copy("AppendixB Species Heatmaps.Rmd", parkDir, 
+            overwrite = F, copy.date = T)
+} else(message("Directory already exists. Examine contents of directory before continuing to ensure data are not lost."))
+```
+
+# .gitignore
+
+Now manually add the new park directory to the .gitignore file. 
+There's a section at the bottom of the file that lists the park sub-directories.
+Add "/PARK" to that list and substitute the park code for PARK, e.g., /MISP.
+
+We do not want to sync the data or other products produced in a species data pull to GitHub due to sensitivity of the data and the large data files produced.
+
+```{r}
+file.edit(".gitignore")
+```
+
+# R Session Information
+```{r session, results='hold'}
+sessionInfo()
+```
