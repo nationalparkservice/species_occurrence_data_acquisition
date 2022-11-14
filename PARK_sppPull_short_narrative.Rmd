@@ -551,32 +551,33 @@ sppList <- sf::st_drop_geometry(gbif_sf) |>
 
 localeCount <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonKey %in% sppList$taxonKey) |> 
-  dplyr::select(taxonKey, locale, gbifID) |> 
-  dplyr::group_by(taxonKey) |> 
+  dplyr::select(taxonKey, locale, gbifID, stateProvince, county) |> 
+  dplyr::group_by(taxonKey, stateProvince, county) |> 
   dplyr::count(locale) |> 
   tidyr::spread(locale, n, fill = 0) |> 
   dplyr::rename(occurrencesInPark = park,
                 occurrencesIn3km = km3,
                 occurrencesIn30km = km30) |>
-  dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
+  dplyr::mutate(totalOccurrences = occurrencesInPark + occurrencesIn3km + occurrencesIn30km) |> 
+  #dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
   dplyr::filter(totalOccurrences > 0)
 
 sppDoYs <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonKey %in% sppList$taxonKey) |> 
-  dplyr::select(taxonKey, date, dayOfYear, year) |> 
-  dplyr::group_by(taxonKey) |> 
+  dplyr::select(taxonKey, date, dayOfYear, year, stateProvince, county) |> 
+  dplyr::group_by(taxonKey, stateProvince, county) |> 
   dplyr::summarise(firstDateObserved = min(date, na.rm = TRUE), 
                    lastDateObserved = max(date, na.rm = TRUE), 
                    firstYearObserved = min(year, na.rm = TRUE), 
-                   lastYearObserved = max(year, na.rm = TRUE))
+                   lastYearObserved = max(year, na.rm = TRUE)) 
 sppDoYs <- do.call(data.frame,                      # Replace Inf in data by NA
                    lapply(sppDoYs,
                           function(x) replace(x, is.infinite(x), NA)))
 
 sppList <- merge(sppList, localeCount,
-                     by.x = "taxonKey", by.y = "taxonKey",
+                     by.x = c("taxonKey", "stateProvince", "county"), by.y = c("taxonKey", "stateProvince", "county"),
                      all.x = TRUE, all.y = FALSE) |> 
-  merge(sppDoYs, by.x = "taxonKey", by.y = "taxonKey",
+  merge(sppDoYs, by.x = c("taxonKey", "stateProvince", "county"), by.y = c("taxonKey", "stateProvince", "county"),
         all.x = TRUE, all.y = FALSE) |> 
   dplyr::select(taxonKey, scientificName, verbatimScientificName, acceptedScientificName,
                 vernacularName, taxonRank, stateProvince, county, 
@@ -593,7 +594,7 @@ write.csv(sppList, file = paste0(params$UnitCode, "_SpeciesTable.csv"),
 
 # How To Use These Data 
 
-See the `r paste0(params$UnitCode, "_SpeciesTable.csv")` delimited output table for the externally-sourced species occurrence data for `r params$UnitName`. Column definitions are noted in Table 11. 
+See the `r paste0(params$UnitCode, "_SpeciesTable.csv")` delimited output table for the externally-sourced species occurrence data for `r params$UnitName`. A species may appear in the table multiple times because it occurred in multiple counties or due to nomenclature differences. Column definitions are noted in Table 11. 
 
 Table 11. Column Definitions in Delimited Output Table
 
