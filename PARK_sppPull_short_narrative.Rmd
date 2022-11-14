@@ -551,21 +551,20 @@ sppList <- sf::st_drop_geometry(gbif_sf) |>
 
 localeCount <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonKey %in% sppList$taxonKey) |> 
-  dplyr::select(taxonKey, locale, gbifID, stateProvince, county) |> 
-  dplyr::group_by(taxonKey, stateProvince, county) |> 
+  dplyr::select(taxonKey, locale, gbifID) |> 
+  dplyr::group_by(taxonKey) |> 
   dplyr::count(locale) |> 
   tidyr::spread(locale, n, fill = 0) |> 
   dplyr::rename(occurrencesInPark = park,
                 occurrencesIn3km = km3,
                 occurrencesIn30km = km30) |>
-  dplyr::mutate(totalOccurrences = occurrencesInPark + occurrencesIn3km + occurrencesIn30km) |> 
-  #dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
+  dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
   dplyr::filter(totalOccurrences > 0)
 
 sppDoYs <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonKey %in% sppList$taxonKey) |> 
-  dplyr::select(taxonKey, date, dayOfYear, year, stateProvince, county) |> 
-  dplyr::group_by(taxonKey, stateProvince, county) |> 
+  dplyr::select(taxonKey, date, dayOfYear, year) |> 
+  dplyr::group_by(taxonKey) |> 
   dplyr::summarise(firstDateObserved = min(date, na.rm = TRUE), 
                    lastDateObserved = max(date, na.rm = TRUE), 
                    firstYearObserved = min(year, na.rm = TRUE), 
@@ -575,9 +574,9 @@ sppDoYs <- do.call(data.frame,                      # Replace Inf in data by NA
                           function(x) replace(x, is.infinite(x), NA)))
 
 sppList <- merge(sppList, localeCount,
-                     by.x = c("taxonKey", "stateProvince", "county"), by.y = c("taxonKey", "stateProvince", "county"),
+                     by.x = "taxonKey", by.y = "taxonKey",
                      all.x = TRUE, all.y = FALSE) |> 
-  merge(sppDoYs, by.x = c("taxonKey", "stateProvince", "county"), by.y = c("taxonKey", "stateProvince", "county"),
+  merge(sppDoYs, by.x = "taxonKey", by.y ="taxonKey", 
         all.x = TRUE, all.y = FALSE) |> 
   dplyr::select(taxonKey, scientificName, verbatimScientificName, acceptedScientificName,
                 vernacularName, taxonRank, stateProvince, county, 
