@@ -6,6 +6,7 @@ author:
   - name: "Lisa Nelson" 
   - name: "Erin Borgman"
   - name: "Alison Loar" 
+  - name: "Cheryl McIntyre" 
     affiliation: |
       | NPS Inventory Program
       | NPS Inventory & Monitoring Division
@@ -421,6 +422,14 @@ rm(gbif)
 # Locations
 localeTbl <- as.data.frame(table(gbif_sf$locale))
 
+#Species 
+sppTotals <- sf::st_drop_geometry(gbif_sf) |> 
+  dplyr::filter(taxonRank  %in% c("SPECIES", "SUBSPECIES", "VARIETY")) %>%
+  dplyr::select(acceptedScientificName, locale) %>%
+  distinct() %>%
+  group_by(locale) %>%
+  dplyr::count(locale, name = 'SpeciesSubVar_n')
+
 # Record types in park
 typesTablePark <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonRank  %in% c("SPECIES", "SUBSPECIES", "VARIETY") & 
@@ -488,9 +497,7 @@ recordsTable <- sf::st_drop_geometry(gbif_sf) |>
   dplyr::count(class, name = 'observations')
 ```
 
-The data downloaded are spatially `r ifelse(isTRUE(validGBIF), "valid", "not valid")`. There are `r localeTbl[localeTbl$Var1 == 'park', 2]` external species occurrence records within the park boundary, another `r localeTbl[localeTbl$Var1 == 'km3', 2]` records within 3km of the park boundary, and `r localeTbl[localeTbl$Var1 == 'km30', 2]` more records between 3km and 30km of the boundary (Table 2).
-Records were obtained from `r nrow(typesTable)` collections or observational GBIF record types (Table 3)
-and from `r nrow(instituteTable)` sources (e.g., museums or data repositories) (Table 4).
+The data downloaded are spatially `r ifelse(isTRUE(validGBIF), "valid", "not valid")`. There are `r localeTbl[localeTbl$Var1 == 'park', 2]` external species occurrence records within the park boundary, another `r localeTbl[localeTbl$Var1 == 'km3', 2]` records within 3km of the park boundary, and `r localeTbl[localeTbl$Var1 == 'km30', 2]` more records between 3km and 30km of the boundary (Table 2). These records include `r sppTotals$SpeciesSubVar_n[sppTotals$locale == 'park']` species, subspecies and varieties within the park boundary, another `r sppTotals$SpeciesSubVar_n[sppTotals$locale == 'km3']` within 3km of the park boundary, and `r sppTotals$SpeciesSubVar_n[sppTotals$locale == 'km30']` more between 3km and 30km of the boundary. Records were obtained from `r nrow(typesTable)` collections or observational GBIF record types (Table 3) and from `r nrow(instituteTable)` sources (e.g., museums or data repositories) (Table 4).
 
 Table 5 displays record counts in the park boundary by taxonomic class and table 6 summarizes species counts in the park boundary by taxonomic class. Tables 7-10 summarize the same concepts using species data in the park and the 30km area around the park boundary.
 
@@ -551,20 +558,21 @@ sppList <- sf::st_drop_geometry(gbif_sf) |>
 
 localeCount <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonKey %in% sppList$taxonKey) |> 
-  dplyr::select(taxonKey, locale, gbifID) |> 
-  dplyr::group_by(taxonKey) |> 
+  dplyr::select(taxonKey, locale, gbifID, stateProvince, county) |> 
+  dplyr::group_by(taxonKey, stateProvince, county) |> 
   dplyr::count(locale) |> 
   tidyr::spread(locale, n, fill = 0) |> 
   dplyr::rename(occurrencesInPark = park,
                 occurrencesIn3km = km3,
                 occurrencesIn30km = km30) |>
-  dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
+  dplyr::mutate(totalOccurrences = occurrencesInPark + occurrencesIn3km + occurrencesIn30km) |> 
+  #dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
   dplyr::filter(totalOccurrences > 0)
 
 sppDoYs <- sf::st_drop_geometry(gbif_sf) |> 
   dplyr::filter(taxonKey %in% sppList$taxonKey) |> 
-  dplyr::select(taxonKey, date, dayOfYear, year) |> 
-  dplyr::group_by(taxonKey) |> 
+  dplyr::select(taxonKey, date, dayOfYear, year, stateProvince, county) |> 
+  dplyr::group_by(taxonKey, stateProvince, county) |> 
   dplyr::summarise(firstDateObserved = min(date, na.rm = TRUE), 
                    lastDateObserved = max(date, na.rm = TRUE), 
                    firstYearObserved = min(year, na.rm = TRUE), 
@@ -574,9 +582,9 @@ sppDoYs <- do.call(data.frame,                      # Replace Inf in data by NA
                           function(x) replace(x, is.infinite(x), NA)))
 
 sppList <- merge(sppList, localeCount,
-                     by.x = "taxonKey", by.y = "taxonKey",
+                     by.x = c("taxonKey", "stateProvince", "county"), by.y = c("taxonKey", "stateProvince", "county"),
                      all.x = TRUE, all.y = FALSE) |> 
-  merge(sppDoYs, by.x = "taxonKey", by.y ="taxonKey", 
+  merge(sppDoYs, by.x = c("taxonKey", "stateProvince", "county"), by.y = c("taxonKey", "stateProvince", "county"),
         all.x = TRUE, all.y = FALSE) |> 
   dplyr::select(taxonKey, scientificName, verbatimScientificName, acceptedScientificName,
                 vernacularName, taxonRank, stateProvince, county, 
