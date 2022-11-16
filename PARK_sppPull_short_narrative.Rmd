@@ -265,20 +265,22 @@ wtkString <- function(myPolygon){
 
 This summary of external species occurrence data provides park planners and resource managers at `r params$UnitName` existing species occurrence records from the [Global Biodiversity Information Facility (GBIF)](https://www.gbif.org/) (2022a) in and near their park, guidance in use and interpretation of these data, and full provenance of the downloaded dataset so anomalous observations may be tracked all the way back to the source for verification or flagging. 
 
-What’s Included:\
+### What’s Included
 
 * This report in HTML format documenting the data acquisition and simple guidance for use of the data
 * The species data table in delimited format (`r paste0(params$UnitCode, "_SpeciesTable.csv")`) 
 * A zipped file in [Darwin Core Archive format](https://www.gbif.org/darwin-core) (GBIF, 2022b) of the full downloaded dataset (example file name: 0146299-220831081235567.zip) 
 
+### About the Data
+
 Many National Park resource management issues require information about species occurrences to inform planning and management actions. The [GBIF repository](https://www.gbif.org/) is a rapidly growing set of nearly one billion externally-sourced species occurrence records and can be leveraged to answer some species occurrence questions. In some cases, these existing externally-sourced records can be used to scope and target planned field surveys to address specific issues and can fill in gaps in our knowledge of species occurrences in parks. 
 
-These are presence-only records and can document the presence of a species in an area of interest and identify species “probably” or “possibly present.” It is important to understand the limitations and known issues of these data. This approach generates these tiers of species occurrence data: 
+These are presence-only records and can document the presence of a species in an area of interest and identify species “probably” or “possibly present.” It can NOT determine the absence of a species. This approach generates these tiers of species occurrence data: 
 
   * species that have been recorded in the park, and
   * species that occur near the park that have not been recorded in the park.
 
-Limitations and Known Issues:\ 
+#### Data Limitations
 
 The source external species occurrence datasets lack information on collection level of effort and on species absences:  
 
@@ -289,6 +291,8 @@ The source external species occurrence datasets lack information on collection l
 * Presence-only records cannot support inferences that a species is more abundant or common in area A than area B, because the difference in numbers of records could be due to differences in the level of search effort by people who would have recorded that species if observed between those areas.   
 
 The source dataset is updated at best monthly and occasionally less frequently. Hence, the technique used to generate these data is repeatable which is why a code file generates the report.  
+
+# Results
 
 Existing species occurrences for `r params$UnitName` (Figure 1) are summarized for three spatial areas of analysis (Kinseth and Nelson, 2022; NPS-IMD, 2021): the park boundary and both 3km and 30km around the boundary, inclusive of the park. Note the zipped data file contains occurrences from the 30km area of analysis.
 
@@ -337,7 +341,7 @@ htmltools::tagList(aoaMap, mapTitle)
 #                     leaflet::addControl(mapTitle, position = "topright"))
 ```
 
-# External Species Occurrence Data from GBIF
+## External Species Occurrence Data from GBIF
 
 ```{r pullGBIF}
 # Make bounding boxes for AOA extents
@@ -601,6 +605,8 @@ write.csv(sppList, file = paste0(params$UnitCode, "_SpeciesTable.csv"),
 
 # How To Use These Data 
 
+### Column definitions
+
 See the `r paste0(params$UnitCode, "_SpeciesTable.csv")` delimited output table for the externally-sourced species occurrence data for `r params$UnitName`. A species may appear in the table multiple times because it occurred in multiple counties or due to nomenclature differences. Column definitions are noted in Table 11. 
 
 Table 11. Column Definitions in Delimited Output Table
@@ -643,15 +649,16 @@ Table 11. Column Definitions in Delimited Output Table
 
 * These data are not intended to prove absence. Some management actions require evidence that species do not occur in an area of interest, such as the absence of protected or sensitive species in a project footprint.  Often, the level of search effort is not recorded in the source datasets and therefore it is not appropriate to use data derived from them to estimate or determine whether a species is definitively absent from an area. A lack of records in a small area or habitat type might well be because that area has never been searched or surveyed.     
 
-### Taxonomy 
+### Caveats
 
-* The classification of living organisms changes frequently, as further specimens and newer techniques change our understanding of the relationships among species, and even change our understanding of the boundaries between distinct taxa.  The externally sourced data include verbatim scientific names of varying vintage and a matching of the of a species’ taxonomic concept to the taxonomy source used: the GBIF taxonomic backbone.  Each taxonomic system reflected in the GBIF backbone has different policies for when to accept taxonomic revisions and may not include certain suites of taxa like insects, non-vascular plants, and microorganisms. A single scientific name might refer to completely different sets of organisms in the different systems used in the backbone or a group of organisms may have different scientific names applied in the different systems.    
+#### Taxonomy 
 
-### Spatial Accuracy 
+* The classification of living organisms changes frequently, as further specimens and newer techniques change our understanding of the relationships among species, and even change our understanding of the boundaries between distinct taxa.  The externally sourced data include verbatim scientific names of varying vintage and a matching of a species’ taxonomic concept to the GBIF taxonomic backbone.  Each taxonomic system reflected in the GBIF backbone has different policies for when to accept taxonomic revisions and may not include certain suites of taxa like insects, non-vascular plants, and microorganisms. A single scientific name might refer to completely different sets of organisms in the different systems used in the backbone or a group of organisms may have different scientific names applied in the different systems.    
 
-* The spatial accuracy of the occurrence coordinates is not important for generating lists of species present or potentially present in the park.  However, for other uses, it is important to understand the origin of those location coordinates and their uncertainty.  The occurrence records included here have geographic location coordinates in Longitude and Latitude and may include country and state codes and location descriptors. The accuracy of the coordinates will vary.  Each observation may include an estimate of the location uncertainty, which may be missing or may range from a few meters to several kilometers and any use of the specific locations should include the location precision included in each observation. Recent observations may have used GPS technology, coordinates in older observations may have been read from a map, very old observations usually include only verbal descriptions of the observation location.  Some of the verbal descriptions may be “georeferenced” using current maps and historic location names. Also, some source datasets may have the location coordinates deliberately fuzzed to protect the location of sensitive species.    
+#### Spatial Accuracy 
 
-This report uses R (version `r paste(sessionInfo()$R.version$major, sessionInfo()$R.version$minor, sep=".")`, R Core Team 2022), the rgbif package (version `r sessionInfo()$otherPkgs$rgbif$Version`, Chamberlain, S. et. al., 2022; Waller, J., 2021) to access data from the Global Biodiversity Information Facility (GBIF) resource (Waller,  2021). 
+* The spatial accuracy of the occurrence coordinates is not important for generating lists of species present or potentially present in the park.  However, for other uses, it is important to understand the origin of those location coordinates and their uncertainty.  The occurrence records included here have geographic location coordinates in Longitude and Latitude and may include country and state codes and location descriptors. The accuracy of the coordinates will vary.  Each observation may include an estimate of the location uncertainty, which may be missing or may range from a few meters to several kilometers and any use of the specific locations should include the location precision included in each observation. Recent observations may have used GPS technology, coordinates in older observations may have been read from a map, and very old observations usually include only verbal descriptions of the observation location.  Some of the verbal descriptions may be “georeferenced” using current maps and historic location names. Also, some source datasets may have the location coordinates deliberately fuzzed to protect the location of sensitive species.    
+
 
 # References
 
@@ -688,6 +695,8 @@ R Core Team. 2022. R: A language and environment for statistical
 Waller, J. 2021. RGBIF: Getting Occurrence Data From GBIF. <https://docs.ropensci.org/rgbif/articles/getting_occurrence_data.html>.
 
 # Session Information
+
+This report uses R (version `r paste(sessionInfo()$R.version$major, sessionInfo()$R.version$minor, sep=".")`, R Core Team 2022), the rgbif package (version `r sessionInfo()$otherPkgs$rgbif$Version`, Chamberlain, S. et. al., 2022; Waller, J., 2021) to access data from the Global Biodiversity Information Facility (GBIF) resource (Waller,  2021). 
 
 This report was generated on `r lubridate::now()`. 
 R session information is printed below.
