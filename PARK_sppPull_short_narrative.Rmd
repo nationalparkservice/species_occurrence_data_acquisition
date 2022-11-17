@@ -572,7 +572,8 @@ localeCount <- sf::st_drop_geometry(gbif_sf) |>
   dplyr::rename(occurrencesInPark = park,
                 occurrencesIn3km = km3,
                 occurrencesIn30km = km30) |>
-  dplyr::mutate(totalOccurrences = occurrencesInPark + occurrencesIn3km + occurrencesIn30km) |> 
+  dplyr::mutate(totalOccurrences = occurrencesIn30km) |>
+  #dplyr::mutate(totalOccurrences = occurrencesInPark + occurrencesIn3km + occurrencesIn30km) |> 
   #dplyr::mutate(totalOccurrences = sum(occurrencesInPark:occurrencesIn30km)) |> 
   dplyr::filter(totalOccurrences > 0)
 
