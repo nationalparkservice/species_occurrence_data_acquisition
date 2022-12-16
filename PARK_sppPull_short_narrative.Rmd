@@ -87,12 +87,12 @@ ggplot2::theme_update(plot.title = ggplot2::element_text(hjust = 0.5))
 sppPage <- 40
 
 #-- eBird details
-eBirdChecklistURL <- "https://www.birds.cornell.edu/clementschecklist/wp-content/uploads/2021/08/eBird-Clements-v2021-integrated-checklist-August-2021.csv"
+eBirdChecklistURL <- "https://www.birds.cornell.edu/clementschecklist/wp-content/uploads/2022/12/NEW_eBird-Clements-v2022-integrated-checklist-October-2022.csv"
 
 eBirdChecklistFile <- file.path(
- # "..", 
+  "..", 
   "Taxa Lists",
-  "eBird-Clements-v2021-integrated-checklist-August-2021.csv"
+  "NEW_eBird-Clements-v2022-integrated-checklist-October-2022.csv"
   )
 ```
 
@@ -347,9 +347,9 @@ htmltools::tagList(aoaMap, mapTitle)
 
 ```{r pullGBIF}
 # Make bounding boxes for AOA extents
-# wtkPark <- wtkString(aoaPark)
-# wtk3k <- wtkString(aoa3k)
-wtk30k <- wtkString(aoa30k)
+# myWTK <- wtkString(aoaPark)
+# myWTK <- wtkString(aoa3k)
+myWTK <- wtkString(aoa30k)
 
 #sourceFooter <- footnote(general="\\\\url{https://www.gbif.org/grscicoll/institution/search/}", general_title = "Source type definitions: ", footnote_as_chunk = TRUE, escape=FALSE, kable_input = myTable) 
 sourceFooter <- "\\\\url{https://www.gbif.org/grscicoll/institution/search/}{Source type definitions:}"
@@ -358,7 +358,7 @@ sourceFooter <- "\\\\url{https://www.gbif.org/grscicoll/institution/search/}{Sou
 # Pull species occurrence records using the 30km AOA
 # Note: Copy and paste the key into the params$Key in the YAML header
 if(params$Key == "new"){
-  gbifPred <- rgbif::pred_within(wtk30k)
+  gbifPred <- rgbif::pred_within(myWTK)
   gbifDwnld <- rgbif::occ_download(gbifPred, user = Sys.getenv("GBIF_USER"),
                              pwd = Sys.getenv("GBIF_PWD"),
                              email = Sys.getenv("GBIF_EMAIL"),
