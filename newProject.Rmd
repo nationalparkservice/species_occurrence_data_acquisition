@@ -12,8 +12,8 @@ output:
   html_document:
     df_print: paged
 params:
-  UnitCode: MISP
-  UnitName: Mill Springs Battlefield National Monument
+  UnitCode: ARCH
+  UnitName: Arches National Park
 ---
 
 ```{r setup, echo=FALSE}
@@ -47,25 +47,39 @@ If the park sub-directory exists, you will get a warning message and the operati
 parkDir <- paste(here::here(), params$UnitCode, sep = "/")
 
 # Choose between PARK_sppPull.Rmd and PARK_sppPull_short.Rmd
-myFile <- "PARK_sppPull.Rmd" 
-myFile_short <- "PARK_sppPull_short.Rmd"
+# myFile <- "PARK_sppPull.Rmd" 
+# myFile_short <- "PARK_sppPull_short.Rmd"
+# myFile_narrative <- "PARK_sppPull_short_narrative.Rmd"
 
 # Create new sub-directory and copy and rename files
 if(!dir.exists(parkDir)){
+  # Create subdirectory
   dir.create(params$UnitCode)
+  
+  # Copy sppPull.Rmd
   file.copy("PARK_sppPull.Rmd", parkDir, overwrite = F, copy.date = T)
-  file.rename(paste(parkDir, myFile, sep = "/"),
+  file.rename(paste(parkDir, "PARK_sppPull.Rmd", sep = "/"),
               paste(parkDir, paste0(params$UnitCode, "_sppPull.Rmd"), 
                     sep = "/"))
+  # Copy sppPull_short.Rmd
   file.copy("PARK_sppPull_short.Rmd", parkDir, overwrite = F, copy.date = T)
-  file.rename(paste(parkDir, myFile_short, sep = "/"),
+  file.rename(paste(parkDir, "PARK_sppPull_short.Rmd", sep = "/"),
               paste(parkDir, paste0(params$UnitCode, "_sppPull_short.Rmd"), 
                     sep = "/"))
-  file.copy("AppendixA Bird Phenology.Rmd", parkDir, 
-            overwrite = F, copy.date = T)
+  # Copy sppPull_short_narrative.Rmd
+  file.copy("PARK_sppPull_short_narrative.Rmd", parkDir, overwrite = F, 
+            copy.date = T)
+  file.rename(paste(parkDir, "PARK_sppPull_short_narrative.Rmd", sep = "/"),
+              paste(parkDir, paste0(params$UnitCode, 
+                                    "_sppPull_short_narrative.Rmd"), 
+                    sep = "/"))
+  file.copy("AppendixA Bird Phenology.Rmd", parkDir, overwrite = F, 
+            copy.date = T)
   file.copy("AppendixB Species Heatmaps.Rmd", parkDir, 
             overwrite = F, copy.date = T)
-} else(message("Directory already exists. Examine contents of directory before continuing to ensure data are not lost."))
+} else(
+  message("Directory already exists. Examine contents of directory before continuing to ensure data are not lost.")
+  )
 ```
 
 # .gitignore
