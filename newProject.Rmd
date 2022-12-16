@@ -48,6 +48,7 @@ parkDir <- paste(here::here(), params$UnitCode, sep = "/")
 
 # Choose between PARK_sppPull.Rmd and PARK_sppPull_short.Rmd
 myFile <- "PARK_sppPull.Rmd" 
+myFile_short <- "PARK_sppPull_short.Rmd"
 
 # Create new sub-directory and copy and rename files
 if(!dir.exists(parkDir)){
@@ -55,6 +56,10 @@ if(!dir.exists(parkDir)){
   file.copy("PARK_sppPull.Rmd", parkDir, overwrite = F, copy.date = T)
   file.rename(paste(parkDir, myFile, sep = "/"),
               paste(parkDir, paste0(params$UnitCode, "_sppPull.Rmd"), 
+                    sep = "/"))
+  file.copy("PARK_sppPull_short.Rmd", parkDir, overwrite = F, copy.date = T)
+  file.rename(paste(parkDir, myFile_short, sep = "/"),
+              paste(parkDir, paste0(params$UnitCode, "_sppPull_short.Rmd"), 
                     sep = "/"))
   file.copy("AppendixA Bird Phenology.Rmd", parkDir, 
             overwrite = F, copy.date = T)

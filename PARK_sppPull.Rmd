@@ -85,12 +85,12 @@ ggplot2::theme_update(plot.title = ggplot2::element_text(hjust = 0.5))
 sppPage <- 40
 
 #-- eBird details
-eBirdChecklistURL <- "https://www.birds.cornell.edu/clementschecklist/wp-content/uploads/2021/08/eBird-Clements-v2021-integrated-checklist-August-2021.csv"
+eBirdChecklistURL <- "https://www.birds.cornell.edu/clementschecklist/wp-content/uploads/2022/12/NEW_eBird-Clements-v2022-integrated-checklist-October-2022.csv"
 
 eBirdChecklistFile <- file.path(
   "..", 
   "Taxa Lists",
-  "eBird-Clements-v2021-integrated-checklist-August-2021.csv"
+  "NEW_eBird-Clements-v2022-integrated-checklist-October-2022.csv"
   )
 ```
 
@@ -300,16 +300,16 @@ The data are downloaded, unzipped, and the data are read in to R once the reques
 
 ```{r pullGBIF}
 # Make bounding boxes for AOA extents
-# bboxPark <- wtkString(aoaPark)
-# bbox3k <- wtkString(aoa3k)
-bbox30k <- wtkString(aoa30k)
+# myWTK <- wtkString(aoaPark)
+# myWTK <- wtkString(aoa3k)
+myWTK <- wtkString(aoa30k)
 
 #-- Pull data from GBIF
 # Pull species occurrence records using the 30km AOA
 # Note: Copy and paste the key into the params$Key in the YAML header
 if(params$Key == "new"){
-  gbifDwnld <- rgbif::occ_download(rgbif::pred_within(bbox30k), 
-                                   format = "DWCA", overwrite = TRUE)
+  gbifPred <- rgbif::pred_within(myWTK)
+  gbifDwnld <- rgbif::occ_download(gbifPred, format = "DWCA")
   rgbif::occ_download_wait(gbifDwnld)
   gbif <- rgbif::occ_download_get(gbifDwnld) |> 
     rgbif::occ_download_import() |> 
@@ -578,32 +578,35 @@ birds <- dplyr::filter(sppList, class_gbif == "Aves")
 
 sppList_birds <- merge(
   dplyr::filter(birds, 
-                  scientificName_gbif %in% checklist$scientific.name),
-                checklist[, c(4:6, 8:10, 1)], 
+                  scientificName_gbif %in% checklist$SCI_NAME),
+                checklist[, c(4:8, 2, 1)], 
                 by.x = c("scientificName_gbif"), 
-                by.y = c("scientific.name"),
+                by.y = c("SCI_NAME"),
                 all.x = TRUE, all.y = FALSE
                 ) |> 
   dplyr::bind_rows(
     merge(
   dplyr::filter(birds, 
-                  !scientificName_gbif %in% checklist$scientific.name),
-                checklist[, c(4:6, 8:10, 1)], 
+                  !scientificName_gbif %in% checklist$SCI_NAME),
+                checklist[, c(4:8, 2, 1)], 
                 by.x = c("vernacularName"), 
-                by.y = c("English.name"),
+                by.y = c("PRIMARY_COM_NAME"),
                 all.x = TRUE, all.y = FALSE
     )
   ) |> 
   # Fill missing common names from eBird
-  dplyr::mutate(vernacularName = ifelse(is.na(vernacularName), English.name, 
+  dplyr::mutate(vernacularName = ifelse(is.na(vernacularName), PRIMARY_COM_NAME, 
                                         vernacularName)) |> 
-  dplyr::rename("order_eBird" = order, 
-                "family_eBird" = family,
-                "category__eBird" = category,
-                "exticnt_eBird" = extinct,
-                "sort2021_eBird" = sort.v2021) |> 
-  dplyr::arrange(sort2021_eBird) |> 
-  dplyr::select(names(sppList), sort2021_eBird)
+  dplyr::rename("commonName_eBird" = PRIMARY_COM_NAME, 
+                "order_eBird" = ORDER1, 
+                "family_eBird" = FAMILY,
+                "sppGroup_eBird" = SPECIES_GROUP,
+                "category_eBird" = CATEGORY,
+                "sort2022_eBird" = TAXON_ORDER, 
+                "scientificName_eBird" = SCI_NAME) |> 
+  dplyr::arrange(sort2022_eBird) |> 
+  dplyr::select(names(sppList), sort2022_eBird)
+
 
 #-- Misspelled names --
 # Correct misspelled vernacular names in GBIF records
@@ -611,7 +614,7 @@ sppList_birds <- merge(
 #     names.
 #     Then correct the names using the following code and re-run birds
 # 
-# sppList_birds[is.na(sppList_birds$sort2021_eBird), c(1:3, 13, 11:12, 23:24)] |> 
+# sppList_birds[is.na(sppList_birds$sort2022_eBird), c(1:3, 13, 11:12, 23:24)] |> 
 #   View()
 # checklist[checklist$scientific.name == "Setophaga aestiva", ]
 # checklist[checklist$English.name == "Hairy Woodpecker", ]
@@ -628,7 +631,7 @@ sppList_birds <- merge(
 #-- Combine lists
 sppList <- sppList |> 
   dplyr::filter(!class_gbif == "Aves") |> 
-  dplyr::mutate(sort2021_eBird = NA) |> 
+  dplyr::mutate(sort2022_eBird = NA) |> 
   dplyr::bind_rows(sppList_birds)
 ```
 
@@ -719,11 +722,11 @@ sppList <- merge(sppList, localeCount,
         all.x = TRUE, all.y = FALSE) |> 
   dplyr::select(taxonKey_gbif, scientificName_gbif, itisID, scientificName_itis,
                 vernacularName, taxonRank_gbif, kingdom_gbif, phylum_gbif,
-                class_gbif, order_gbif, family_gbif, genus_gbif, sort2021_eBird, 
+                class_gbif, order_gbif, family_gbif, genus_gbif, sort2022_eBird, 
                 fedStatus, fedTSN, park, km3, km30,
                 firstDate, lastDate, firstYear, lastYear) |> 
   dplyr::arrange(kingdom_gbif, phylum_gbif, class_gbif, 
-                 order_gbif, family_gbif, genus_gbif, sort2021_eBird,
+                 order_gbif, family_gbif, genus_gbif, sort2022_eBird,
                  scientificName_gbif)
 
 # Fix missing common names
@@ -813,7 +816,7 @@ myTable(dplyr::select(sppConcern, scientificName_gbif, vernacularName,
 spp_df <- merge(sppConcern[, c('taxonID', 'scientificName_gbif',
                                'vernacularName', 'fedStatus')], 
                 sppList[, c('taxonKey_gbif', 'itisID', 'kingdom_gbif', 
-                            'class_gbif', 'sort2021_eBird')], 
+                            'class_gbif', 'sort2022_eBird')], 
                 by.x = 'taxonID', by.y = 'itisID', 
                 all.x = TRUE, all.y = FALSE) |> 
   merge(sf::st_drop_geometry(gbif_sf[, c('taxonKey', 'dayOfYear')]), 
@@ -837,7 +840,7 @@ spp_status <- spp_status[!is.na(spp_status)]
 # Phenology
 lapply(spp_status, function(status){
   tmp_df <- spp_df[spp_df$fedStatus == status, ] |>
-    dplyr::arrange(kingdom_gbif, class_gbif, sort2021_eBird, 
+    dplyr::arrange(kingdom_gbif, class_gbif, sort2022_eBird, 
                        scientificName_gbif) |> 
     dplyr::mutate(taxon = ifelse(is.na(vernacularName), scientificName_gbif,
                                  vernacularName))
