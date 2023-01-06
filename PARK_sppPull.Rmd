@@ -981,7 +981,9 @@ R Core Team (2022). R: A language and environment for statistical
   computing. R Foundation for Statistical Computing, Vienna, Austria. URL
   <https://www.R-project.org/>.
 
-# Session
+# Session Information
+
+This report uses R (version `r paste(R.version$major, R.version$minor, sep=".")`, R Core Team `r R.version$year`), the rgbif package (version `r packageVersion("rgbif")`, Chamberlain, S. et. al., `r lubridate::year(packageDate("rgbif"))`; Waller, J., 2021) to access data from the Global Biodiversity Information Facility (GBIF) resource (Waller,  2021). 
 
 This report was generated on `r lubridate::now()`. 
 R session information is printed below.

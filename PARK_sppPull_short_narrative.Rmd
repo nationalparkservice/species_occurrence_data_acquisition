@@ -700,7 +700,7 @@ Waller, J. 2021. RGBIF: Getting Occurrence Data From GBIF. <https://docs.ropensc
 
 # Session Information
 
-This report uses R (version `r paste(sessionInfo()$R.version$major, sessionInfo()$R.version$minor, sep=".")`, R Core Team 2022), the rgbif package (version `r sessionInfo()$otherPkgs$rgbif$Version`, Chamberlain, S. et. al., 2022; Waller, J., 2021) to access data from the Global Biodiversity Information Facility (GBIF) resource (Waller,  2021). 
+This report uses R (version `r paste(R.version$major, R.version$minor, sep=".")`, R Core Team `r R.version$year`), the rgbif package (version `r packageVersion("rgbif")`, Chamberlain, S. et. al., `r lubridate::year(packageDate("rgbif"))`; Waller, J., 2021) to access data from the Global Biodiversity Information Facility (GBIF) resource (Waller,  2021). 
 
 This report was generated on `r lubridate::now()`. 
 R session information is printed below.
